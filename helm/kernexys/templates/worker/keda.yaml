@@ -1,0 +1,47 @@
+{{- if and .Values.worker.enabled .Values.worker.keda.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: kernexys-worker
+  namespace: {{ .Values.namespace.workers }}
+  labels:
+    app: kernexys-worker
+    {{- include "kernexys.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: kernexys-worker
+    kind: Deployment
+  minReplicaCount: {{ .Values.worker.keda.minReplicaCount }}
+  maxReplicaCount: {{ .Values.worker.keda.maxReplicaCount }}
+  # Graceful termination: wait for active jobs to complete.
+  fallback:
+    failureThreshold: 3
+    replicas: 2
+  # Use Redis list length for scaling.
+  triggers:
+    - type: redis
+      metadata:
+        address: {{ .Values.worker.keda.redisAddress | quote }}
+        # The "queued" list holds job IDs awaiting processing.
+        listName: "kernexys:inference:queued"
+        listLength: {{ .Values.worker.keda.listLength | quote }}
+        dbIndex: "0"
+        passwordFromEnv: "REDIS_PASSWORD"
+      authenticationRef:
+        name: kernexys-redis-auth
+  cooldownPeriod: {{ .Values.worker.keda.cooldownPeriod }}
+  pollingInterval: {{ .Values.worker.keda.pollingInterval }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: kernexys-redis-auth
+  namespace: {{ .Values.namespace.workers }}
+  labels:
+    {{- include "kernexys.labels" . | nindent 4 }}
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: {{ .Values.worker.keda.triggerAuth.secretName }}
+      key: {{ .Values.worker.keda.triggerAuth.passwordKey }}
+{{- end }}

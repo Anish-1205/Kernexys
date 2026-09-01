@@ -1,0 +1,99 @@
+{{- if and .Values.api.enabled .Values.api.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kernexys-api
+  namespace: {{ .Values.namespace.system }}
+  labels:
+    app: kernexys-api
+    {{- include "kernexys.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: kernexys-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from an Ingress controller, if one is deployed.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow from a monitoring namespace scraping metrics.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.service.metricsPort }}
+  egress:
+    # Allow DNS for service discovery.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow to PostgreSQL.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.namespace.system }}
+          podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow to Redis.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.namespace.system }}
+          podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow to the Kubernetes API server.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              component: kube-apiserver
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow to workers for async queue management.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.namespace.workers }}
+          podSelector:
+            matchLabels:
+              app: kernexys-worker
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kernexys-deny-all
+  namespace: {{ .Values.namespace.system }}
+  labels:
+    {{- include "kernexys.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+{{- end }}

@@ -1,0 +1,96 @@
+{{- if .Values.controller.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kernexys-controller-role
+  labels:
+    app.kubernetes.io/name: kernexys-controller
+    {{- include "kernexys.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - platform.kernexys.io
+    resources:
+      - modeldeployments
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - platform.kernexys.io
+    resources:
+      - modeldeployments/status
+    verbs:
+      - get
+      - patch
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kernexys-controller-rolebinding
+  labels:
+    {{- include "kernexys.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kernexys-controller-role
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.controller.serviceAccount.name }}
+    namespace: {{ .Values.namespace.system }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kernexys-leader-election-role
+  namespace: {{ .Values.namespace.system }}
+  labels:
+    {{- include "kernexys.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - create
+      - get
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kernexys-leader-election-rolebinding
+  namespace: {{ .Values.namespace.system }}
+  labels:
+    {{- include "kernexys.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kernexys-leader-election-role
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.controller.serviceAccount.name }}
+    namespace: {{ .Values.namespace.system }}
+{{- end }}

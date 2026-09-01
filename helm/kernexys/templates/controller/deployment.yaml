@@ -1,0 +1,65 @@
+{{- if .Values.controller.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kernexys-controller
+  namespace: {{ .Values.namespace.system }}
+  labels:
+    app.kubernetes.io/name: kernexys-controller
+    {{- include "kernexys.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.controller.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kernexys-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kernexys-controller
+        app.kubernetes.io/part-of: kernexys
+    spec:
+      serviceAccountName: {{ .Values.controller.serviceAccount.name }}
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: controller
+          image: {{ include "kernexys.image" (dict "global" .Values.global "image" .Values.controller.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          args:
+            - --leader-elect
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.controller.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+{{- end }}

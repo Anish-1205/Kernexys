@@ -1,0 +1,23 @@
+apiVersion: v2
+name: kernexys
+description: Local-first AI model registry and deployment control plane
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+maintainers:
+  - name: Kernexys Team
+    email: team@kernexys.dev
+
+keywords:
+  - kubernetes
+  - ai
+  - ml
+  - model-deployment
+  - inference
+
+home: https://github.com/your-org/kernexys
+sources:
+  - https://github.com/your-org/kernexys
+
+dependencies: []

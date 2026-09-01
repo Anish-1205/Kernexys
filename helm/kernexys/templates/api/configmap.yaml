@@ -1,0 +1,14 @@
+{{- if .Values.api.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kernexys-api
+  namespace: {{ .Values.namespace.system }}
+  labels:
+    app: kernexys-api
+    {{- include "kernexys.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.api.env }}
+  KERNEXYS_{{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}

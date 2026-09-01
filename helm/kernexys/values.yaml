@@ -1,0 +1,143 @@
+# Default values for the kernexys Helm chart.
+# Mirrors controller/config/{api,worker,manager,rbac,crd} 1:1 — see docs/deployments.md,
+# docs/keda.md, and docs/security.md for the behavior these values configure.
+
+global:
+  # Optional registry prefix prepended to every image repository below.
+  registry: ""
+  imagePullPolicy: IfNotPresent
+
+# The platform.kernexys.io/v1alpha1 ModelDeployment CRD ships in crds/ and is
+# always installed by Helm on `helm install` (Helm does not template or
+# upgrade/delete files under crds/ — see https://helm.sh/docs/chart_best_practices/custom_resource_definitions/).
+
+namespace:
+  create: true
+  # Control API + controller manager namespace.
+  system: kernexys-system
+  # Async worker namespace (KEDA-scaled, isolated from the control API).
+  workers: kernexys-workers
+  podSecurityStandards:
+    enforce: restricted
+    audit: restricted
+
+# Control API (FastAPI model registry + deployment API).
+api:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: kernexys/control-api
+    tag: dev
+
+  serviceAccount:
+    create: true
+    name: kernexys-api
+
+  service:
+    port: 8000
+    metricsPort: 8001
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+  # Non-secret application configuration (KERNEXYS_ prefix added by the ConfigMap template).
+  env:
+    LOG_LEVEL: INFO
+    LOGGING_FORMAT: json
+    LOGGING_CORRELATION_ID_ENABLED: "true"
+    METRICS_ENABLED: "true"
+    METRICS_PORT: "8001"
+    SERVER_LIMIT_CONCURRENCY: "100"
+    MAX_REQUEST_BYTES: "1048576"
+    KUBERNETES_ENABLED: "true"
+    KUBERNETES_CONFIG_MODE: "in-cluster"
+    ASYNC_INFERENCE_ENABLED: "true"
+
+  # References to pre-existing Secrets (create these out-of-band; see docs/security.md).
+  secrets:
+    database:
+      name: kernexys-db
+      key: url
+    redis:
+      name: kernexys-redis
+      key: url
+
+  networkPolicy:
+    enabled: true
+
+# Async inference worker (Redis queue consumer, KEDA-scaled).
+worker:
+  enabled: true
+  replicaCount: 1 # KEDA manages replica count when keda.enabled is true.
+
+  image:
+    repository: kernexys/control-api # worker ships in the same control-plane image, different entrypoint
+    tag: dev
+
+  serviceAccount:
+    create: true
+    name: kernexys-worker
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+  env:
+    LOG_LEVEL: INFO
+    ASYNC_WORKER_CONCURRENCY: "4"
+    ASYNC_INFERENCE_TIMEOUT_SECONDS: "30"
+
+  secrets:
+    redis:
+      name: kernexys-redis
+      key: url
+
+  keda:
+    enabled: true
+    minReplicaCount: 1
+    maxReplicaCount: 10
+    listLength: "5"
+    pollingInterval: 15
+    cooldownPeriod: 30
+    # Redis address KEDA polls directly (independent of the worker's KERNEXYS_REDIS_URL).
+    redisAddress: "redis.kernexys-system:6379"
+    # Same secret as worker.secrets.redis; must also carry a "password" key
+    # (KEDA's TriggerAuthentication reads it directly, alongside the URL used
+    # by KERNEXYS_REDIS_URL).
+    triggerAuth:
+      secretName: kernexys-redis
+      passwordKey: password
+
+# ModelDeployment reconciler (Go controller).
+controller:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: kernexys/controller
+    tag: dev
+
+  serviceAccount:
+    create: true
+    name: kernexys-controller
+
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# Labels merged onto every resource in addition to app.kubernetes.io/part-of=kernexys.
+commonLabels: {}

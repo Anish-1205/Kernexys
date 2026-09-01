@@ -1,0 +1,27 @@
+{{- if .Values.namespace.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace.system }}
+  labels:
+    app.kubernetes.io/part-of: kernexys
+    pod-security.kubernetes.io/enforce: {{ .Values.namespace.podSecurityStandards.enforce }}
+    pod-security.kubernetes.io/audit: {{ .Values.namespace.podSecurityStandards.audit }}
+{{- with .Values.commonLabels }}
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+{{- if .Values.worker.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace.workers }}
+  labels:
+    app.kubernetes.io/part-of: kernexys
+    pod-security.kubernetes.io/enforce: {{ .Values.namespace.podSecurityStandards.enforce }}
+    pod-security.kubernetes.io/audit: {{ .Values.namespace.podSecurityStandards.audit }}
+{{- with .Values.commonLabels }}
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}

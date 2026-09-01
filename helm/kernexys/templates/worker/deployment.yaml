@@ -1,0 +1,80 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kernexys-worker
+  namespace: {{ .Values.namespace.workers }}
+  labels:
+    app: kernexys-worker
+    version: v1
+    {{- include "kernexys.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.worker.replicaCount }} # KEDA overrides this when worker.keda.enabled is true.
+  selector:
+    matchLabels:
+      app: kernexys-worker
+  template:
+    metadata:
+      labels:
+        app: kernexys-worker
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+    spec:
+      serviceAccountName: {{ .Values.worker.serviceAccount.name }}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 35
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534 # nobody
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: {{ include "kernexys.image" (dict "global" .Values.global "image" .Values.worker.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command:
+            - kernexys-worker
+          envFrom:
+            - configMapRef:
+                name: kernexys-worker
+          env:
+            - name: KERNEXYS_REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.worker.secrets.redis.name }}
+                  key: {{ .Values.worker.secrets.redis.key }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - ps aux | grep kernexys-worker | grep -v grep
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: var-tmp
+              mountPath: /var/tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: var-tmp
+          emptyDir:
+            sizeLimit: 16Mi
+{{- end }}
