@@ -1,6 +1,6 @@
 # Architecture
 
-## Intended control flow
+## Control flow
 
 ```text
 REST API / CLI / kubectl
@@ -15,9 +15,10 @@ Kernexys controller reconciliation loop
 owned Kubernetes workload + Service -> model runtime
 ```
 
-The custom resource will be the source of truth for deployment desired state.
-The control API will validate registered model metadata and write that resource;
-it will not create Deployments, Services, Rollouts, or autoscaling resources.
+The custom resource is the source of truth for deployment desired state. The
+future deployment API will validate registered model metadata and write that
+resource; it will not create Deployments, Services, Rollouts, or autoscaling
+resources.
 
 ## Implemented components
 
@@ -31,13 +32,35 @@ readiness dependent on a time-bounded database query.
 The liveness probe intentionally has no database dependency. A PostgreSQL outage
 therefore removes an API pod from service without asking Kubernetes to restart an
 otherwise healthy process. The API fails registry operations during that outage;
-future, already-reconciled inference workloads will not depend on this database.
+already-reconciled inference workloads do not depend on this database or API.
+
+### ModelDeployment controller
+
+The Go controller watches `platform.kernexys.io/v1alpha1` `ModelDeployment`
+resources and owns a same-name Deployment and ClusterIP Service. Each reconcile
+uses create-or-update semantics, restores controller-managed fields after drift,
+and skips writes when the desired child resources and CR status already match.
+The controller refuses to adopt a same-name object that has no controller owner.
+
+Status exposes observed generation, desired/ready replicas, endpoint, active
+model/version, and `Available`, `Progressing`, and `Degraded` conditions. Invalid
+desired state is reported without retrying; Kubernetes/API failures are returned
+to controller-runtime for its work-queue retry behavior. No finalizer is used:
+children are Kubernetes-owned through controller references and require no
+external cleanup.
+
+The controller manager has bounded reconciliation concurrency, health/readiness
+probes, a graceful shutdown deadline, leader election, and controller-runtime's
+Prometheus reconciliation counters/error counters/duration histograms. Runtime
+pods are emitted with CPU/memory settings from the CR and a restricted security
+context.
 
 ### Not yet implemented
 
-The Kubernetes API, Go controller, deployment API, reference model runtime,
-Redis/KEDA async path, observability stack, and progressive delivery are future
-vertical slices. No behavior from those slices is claimed in this document.
+The deployment API, reference model runtime, Redis/KEDA async path, observability
+stack, and progressive delivery are future vertical slices. The kind manifests
+have not been exercised on this host, so real-cluster garbage collection,
+workload readiness, inference, and drift-repair E2E behavior remain unverified.
 
 ## Data ownership
 
@@ -51,9 +74,18 @@ vertical slices. No behavior from those slices is claimed in this document.
 ## Current failure behavior
 
 - API process crash: the process exits; its supervisor is expected to restart it.
+- Controller process crash: Kubernetes retains CRs, Deployments, and Services;
+  after restart, watches resynchronize and idempotent reconciliation resumes.
 - PostgreSQL unavailable: liveness remains healthy, readiness returns `503`, and
-  registry requests fail. No inference workload currently exists in this slice.
+  registry requests fail. Existing Kubernetes workloads have no PostgreSQL
+  dependency.
+- Invalid `ModelDeployment`: the CR receives a `Degraded=True` condition with an
+  `InvalidSpec` reason and is not hot-loop retried.
+- Transient Kubernetes write failure: status is marked degraded when possible and
+  the error is returned for controller-runtime backoff/retry.
 - Graceful stop: Uvicorn stops accepting work, waits up to the configured graceful
   shutdown timeout, then FastAPI disposes the database engine.
+- Controller graceful stop: the manager drains for up to 20 seconds and releases
+  its leader-election lease.
 - Oversized input: requests above the configured byte limit return a structured
   `413` before endpoint parsing.

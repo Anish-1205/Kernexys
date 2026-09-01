@@ -1,0 +1,20 @@
+apiVersion: platform.kernexys.io/v1alpha1
+kind: ModelDeployment
+metadata:
+  name: sentiment
+  namespace: default
+spec:
+  model:
+    name: sentiment
+    version: v1
+  runtime:
+    image: kernexys/model-runtime:v1
+    port: 8080
+  replicas: 1
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi

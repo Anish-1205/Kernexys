@@ -7,9 +7,12 @@
 .pytest_cache/
 .ruff_cache/
 .test-tmp/
+.tools/
 .venv/
 *.db
 *.egg-info/
 *.py[cod]
 __pycache__/
+controller/bin/
+controller/cover.out
 venv/

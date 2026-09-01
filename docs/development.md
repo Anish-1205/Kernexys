@@ -79,3 +79,20 @@ services. The migration test uses SQLite to validate migration mechanics. A real
 PostgreSQL integration run and container build have not yet been performed on the
 current host because neither PostgreSQL nor Docker is installed; those validations
 must not be inferred from the SQLite test.
+
+The controller unit suite uses controller-runtime's fake client, including a
+write-counting wrapper that verifies steady-state reconciliation performs no
+child or status writes. Run the real API-server integration test with:
+
+```bash
+make controller-integration
+```
+
+That target pins `setup-envtest` and Kubernetes `1.37.0`, then starts local
+kube-apiserver and etcd processes. On Windows, controller-runtime `v0.24.1`
+cannot send its Unix shutdown signals; the test recovery code matches that exact
+failure and terminates only the kube-apiserver and etcd executable paths selected
+by the test. Other teardown failures still fail the suite.
+
+The kind workflow and its unverified host requirements are documented in
+[Local kind environment](kind.md).

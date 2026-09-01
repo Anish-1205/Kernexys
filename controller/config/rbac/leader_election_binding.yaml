@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kernexys-leader-election-rolebinding
+  namespace: kernexys-system
+  labels:
+    app.kubernetes.io/part-of: kernexys
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kernexys-leader-election-role
+subjects:
+  - kind: ServiceAccount
+    name: kernexys-controller
+    namespace: kernexys-system

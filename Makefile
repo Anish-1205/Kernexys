@@ -1,8 +1,17 @@
-.PHONY: install format lint test migrate run container-build container-up container-down container-clean
+.PHONY: install format lint test migrate run container-build container-up container-down container-clean controller-generate controller-format controller-vet controller-test controller-integration kind-create kind-delete kind-build kind-load kind-install kind-validate
 
 PYTHON ?= .venv/bin/python
 RUFF ?= .venv/bin/ruff
 ALEMBIC ?= .venv/bin/alembic
+GO ?= go
+ENVTEST_K8S_VERSION ?= 1.37.0
+SETUP_ENVTEST_VERSION ?= v0.24.2-0.20260713111223-0f529e22d5c0
+KIND ?= kind
+KUBECTL ?= kubectl
+KIND_CLUSTER_NAME ?= kernexys
+KIND_NODE_IMAGE ?= kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+CONTROL_API_IMAGE ?= kernexys/control-api:dev
+CONTROLLER_IMAGE ?= kernexys/controller:dev
 
 install:
 	python -m venv .venv
@@ -37,3 +46,39 @@ container-down:
 # Explicitly destructive: also deletes the local PostgreSQL volume.
 container-clean:
 	docker compose down --volumes
+
+controller-generate:
+	cd controller && $(GO) run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0 object:headerFile=hack/boilerplate.go.txt paths=./api/v1alpha1
+	cd controller && $(GO) run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0 crd paths=./api/v1alpha1 output:crd:artifacts:config=config/crd/bases
+	cd controller && $(GO) run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0 rbac:roleName=kernexys-controller-role paths=./internal/controller output:rbac:artifacts:config=config/rbac
+
+controller-format:
+	cd controller && $(GO) fmt ./...
+
+controller-vet:
+	cd controller && $(GO) vet ./...
+
+controller-test:
+	cd controller && $(GO) test ./... -coverprofile=cover.out
+
+controller-integration:
+	cd controller && KUBEBUILDER_ASSETS="$$($(GO) run sigs.k8s.io/controller-runtime/tools/setup-envtest@$(SETUP_ENVTEST_VERSION) use --bin-dir bin/k8s --print path $(ENVTEST_K8S_VERSION))" $(GO) test ./internal/controller -run Envtest -count=1
+
+kind-create:
+	$(KIND) create cluster --name $(KIND_CLUSTER_NAME) --image $(KIND_NODE_IMAGE) --config deploy/kind/config.yaml --wait 120s
+
+kind-delete:
+	$(KIND) delete cluster --name $(KIND_CLUSTER_NAME)
+
+kind-build:
+	docker build --tag $(CONTROL_API_IMAGE) .
+	docker build --file controller/Dockerfile --tag $(CONTROLLER_IMAGE) controller
+
+kind-load:
+	$(KIND) load docker-image --name $(KIND_CLUSTER_NAME) $(CONTROL_API_IMAGE) $(CONTROLLER_IMAGE)
+
+kind-install:
+	$(KUBECTL) apply --kustomize controller/config/default
+
+kind-validate:
+	$(KUBECTL) wait --namespace kernexys-system --for=condition=Available deployment/kernexys-controller --timeout=120s

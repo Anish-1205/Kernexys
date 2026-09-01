@@ -1,11 +1,11 @@
 # Kernexys
 
-Kernexys is a local-first AI infrastructure control plane. Its intended source of
-truth is a Kubernetes `ModelDeployment`; a controller will continuously reconcile
-that declaration into a runnable inference workload.
+Kernexys is a local-first AI infrastructure control plane. A Kubernetes
+`ModelDeployment` is the source of truth, and the Go controller continuously
+reconciles that declaration into an owned Deployment and Service.
 
-The repository is being built in validated vertical slices. The current slice is
-the control API's model registry. It includes:
+The repository is being built in validated vertical slices. Implemented slices
+currently include:
 
 - a typed FastAPI service with liveness and database-backed readiness;
 - idempotent model registration and immutable model-version registration;
@@ -13,10 +13,20 @@ the control API's model registry. It includes:
 - structured errors, JSON logs, request IDs, bounded request bodies, bounded
   database pools, and graceful process shutdown;
 - unit/API and migration tests.
+- a generated `platform.kernexys.io/v1alpha1` `ModelDeployment` CRD;
+- an idempotent controller-runtime reconciler with ownership, drift repair,
+  generation-aware status conditions, health probes, and built-in reconciliation
+  metrics;
+- unit tests using a write-counting fake client and integration tests against a
+  real envtest kube-apiserver and etcd;
+- pinned kind configuration and local image build/load/install commands.
 
-The Kubernetes CRD/controller, deployment API, reference runtime, and later
-reliability features are not yet implemented. See [Architecture](docs/architecture.md)
-for the boundary that subsequent slices will preserve.
+The deployment API, reference runtime, and later reliability features are not yet
+implemented. The kind workflow is checked in but has not run on this host because
+Docker, kind, and a host kubectl installation are absent. See
+[Architecture](docs/architecture.md), [Controller](docs/controller.md), and
+[Local kind environment](docs/kind.md) for the implemented boundaries and exact
+validation status.
 
 ## Run the current slice
 
@@ -70,6 +80,16 @@ identifier with different content returns `409 immutable_model_version`.
 
 Additional setup, configuration, and current validation limits are documented in
 [Local development](docs/development.md).
+
+Validate the Go controller independently of Docker:
+
+```bash
+make controller-generate
+make controller-format
+make controller-vet
+make controller-test
+make controller-integration
+```
 
 ## Docker development stack
 
