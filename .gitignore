@@ -15,4 +15,5 @@
 __pycache__/
 controller/bin/
 controller/cover.out
+runtime/cover.out
 venv/

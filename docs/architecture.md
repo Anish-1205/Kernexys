@@ -55,12 +55,25 @@ Prometheus reconciliation counters/error counters/duration histograms. Runtime
 pods are emitted with CPU/memory settings from the CR and a restricted security
 context.
 
+### Reference model runtime
+
+The reference runtime is a small deterministic sentiment classifier with two
+sets of baked weights (`v1` and `v2`). Separate OCI image builds couple the HTTP
+runtime and selected weights. The process refuses to start if the model version
+declared by the controller differs from the image's baked version.
+
+The synchronous runtime has no PostgreSQL or Redis dependency. It exposes live
+and ready health, bounded inference requests, request IDs, and Prometheus request
+count and latency metrics. Uvicorn bounds concurrent accepted work and drains on
+termination. See [Reference runtime](runtime.md) and
+[ADR 0004](adr/0004-oci-model-runtime-images.md).
+
 ### Not yet implemented
 
-The deployment API, reference model runtime, Redis/KEDA async path, observability
-stack, and progressive delivery are future vertical slices. The kind manifests
-have not been exercised on this host, so real-cluster garbage collection,
-workload readiness, inference, and drift-repair E2E behavior remain unverified.
+The deployment API, Redis/KEDA async path, observability stack, and progressive
+delivery are future vertical slices. The kind manifests and runtime images have
+not been built on this host, so real-cluster garbage collection, workload
+readiness, inference, and drift-repair E2E behavior remain unverified.
 
 ## Data ownership
 
@@ -89,3 +102,7 @@ workload readiness, inference, and drift-repair E2E behavior remain unverified.
   its leader-election lease.
 - Oversized input: requests above the configured byte limit return a structured
   `413` before endpoint parsing.
+- Runtime process crash: its Deployment restarts the pod; other ready replicas
+  continue serving through the Service.
+- Registry/API/PostgreSQL outage: an already-running synchronous runtime keeps
+  serving because its artifact and model weights are in the OCI image.

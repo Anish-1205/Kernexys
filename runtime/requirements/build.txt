@@ -1,0 +1,2 @@
+# Build-only dependency. It is removed before the virtual environment is copied.
+setuptools==80.9.0

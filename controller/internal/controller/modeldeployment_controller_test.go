@@ -38,6 +38,19 @@ func TestFirstReconciliationCreatesOwnedResourcesAndStatus(t *testing.T) {
 	if got := deployment.Spec.Template.Spec.Containers[0].Image; got != "kernexys/model-runtime:v1" {
 		t.Fatalf("runtime image = %q, want kernexys/model-runtime:v1", got)
 	}
+	runtimeEnvironment := map[string]string{}
+	for _, variable := range deployment.Spec.Template.Spec.Containers[0].Env {
+		runtimeEnvironment[variable.Name] = variable.Value
+	}
+	if got := runtimeEnvironment["KERNEXYS_MODEL_NAME"]; got != "sentiment" {
+		t.Fatalf("runtime model name = %q, want sentiment", got)
+	}
+	if got := runtimeEnvironment["KERNEXYS_MODEL_VERSION"]; got != "v1" {
+		t.Fatalf("runtime model version = %q, want v1", got)
+	}
+	if got := runtimeEnvironment["KERNEXYS_RUNTIME_PORT"]; got != "8080" {
+		t.Fatalf("runtime port = %q, want 8080", got)
+	}
 	if got := *deployment.Spec.Replicas; got != 1 {
 		t.Fatalf("replicas = %d, want 1", got)
 	}

@@ -18,8 +18,9 @@ Delete the cluster with `make kind-delete`. The command is scoped to the
 `kernexys` kind cluster by default; override `KIND_CLUSTER_NAME` consistently if
 another name is required.
 
-The image defaults are `kernexys/control-api:dev` and
-`kernexys/controller:dev`. kind imports those images directly from the local
+The image defaults are `kernexys/control-api:dev`, `kernexys/controller:dev`, and
+the two reference artifacts `kernexys/model-runtime:v1` and
+`kernexys/model-runtime:v2`. kind imports those images directly from the local
 Docker daemon, so GHCR credentials are not part of local development.
 
 ## Validation status
@@ -31,3 +32,7 @@ E2E validation. The exact first command required on a capable host is:
 ```bash
 make kind-create
 ```
+
+The runtime itself has been exercised as a real local Uvicorn process, but neither
+runtime Dockerfile has been built and no ModelDeployment has reached Ready in a
+kind cluster on this host.

@@ -12,19 +12,21 @@ currently include:
 - PostgreSQL-oriented SQLAlchemy models and Alembic migrations;
 - structured errors, JSON logs, request IDs, bounded request bodies, bounded
   database pools, and graceful process shutdown;
-- unit/API and migration tests.
+- unit/API and migration tests;
 - a generated `platform.kernexys.io/v1alpha1` `ModelDeployment` CRD;
 - an idempotent controller-runtime reconciler with ownership, drift repair,
   generation-aware status conditions, health probes, and built-in reconciliation
   metrics;
 - unit tests using a write-counting fake client and integration tests against a
   real envtest kube-apiserver and etcd;
-- pinned kind configuration and local image build/load/install commands.
+- pinned kind configuration and local image build/load/install commands;
+- deterministic CPU-only `v1` and `v2` reference runtime artifacts with health,
+  readiness, bounded inference, request correlation, and Prometheus metrics.
 
-The deployment API, reference runtime, and later reliability features are not yet
-implemented. The kind workflow is checked in but has not run on this host because
-Docker, kind, and a host kubectl installation are absent. See
-[Architecture](docs/architecture.md), [Controller](docs/controller.md), and
+The deployment API and later reliability features are not yet implemented. The
+kind workflow is checked in but has not run on this host because Docker, kind, and
+a host kubectl installation are absent. See [Architecture](docs/architecture.md),
+[Controller](docs/controller.md), [Reference runtime](docs/runtime.md), and
 [Local kind environment](docs/kind.md) for the implemented boundaries and exact
 validation status.
 
@@ -89,6 +91,19 @@ make controller-format
 make controller-vet
 make controller-test
 make controller-integration
+```
+
+Install and exercise the reference runtime independently of Docker:
+
+```bash
+make runtime-install
+make runtime-lint
+make runtime-test
+KERNEXYS_BAKED_MODEL_VERSION=v2 KERNEXYS_MODEL_VERSION=v2 \
+  .venv/bin/kernexys-model-runtime
+curl -X POST http://127.0.0.1:8080/v1/infer \
+  -H 'content-type: application/json' \
+  -d '{"text":"reliable and fast"}'
 ```
 
 ## Docker development stack

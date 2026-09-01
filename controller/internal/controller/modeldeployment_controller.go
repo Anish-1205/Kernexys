@@ -337,6 +337,7 @@ func mutateDeployment(modelDeployment *platformv1alpha1.ModelDeployment, deploym
 					Env: []corev1.EnvVar{
 						{Name: "KERNEXYS_MODEL_NAME", Value: modelDeployment.Spec.Model.Name},
 						{Name: "KERNEXYS_MODEL_VERSION", Value: modelDeployment.Spec.Model.Version},
+						{Name: "KERNEXYS_RUNTIME_PORT", Value: fmt.Sprintf("%d", port)},
 					},
 					Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: port, Protocol: corev1.ProtocolTCP}},
 					Resources: corev1.ResourceRequirements{

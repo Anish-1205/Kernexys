@@ -1,4 +1,4 @@
-.PHONY: install format lint test migrate run container-build container-up container-down container-clean controller-generate controller-format controller-vet controller-test controller-integration kind-create kind-delete kind-build kind-load kind-install kind-validate
+.PHONY: install format lint test migrate run container-build container-up container-down container-clean controller-generate controller-format controller-vet controller-test controller-integration runtime-install runtime-format runtime-lint runtime-test kind-create kind-delete kind-build kind-load kind-install kind-validate
 
 PYTHON ?= .venv/bin/python
 RUFF ?= .venv/bin/ruff
@@ -12,6 +12,8 @@ KIND_CLUSTER_NAME ?= kernexys
 KIND_NODE_IMAGE ?= kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
 CONTROL_API_IMAGE ?= kernexys/control-api:dev
 CONTROLLER_IMAGE ?= kernexys/controller:dev
+MODEL_RUNTIME_V1_IMAGE ?= kernexys/model-runtime:v1
+MODEL_RUNTIME_V2_IMAGE ?= kernexys/model-runtime:v2
 
 install:
 	python -m venv .venv
@@ -26,7 +28,7 @@ lint:
 	$(RUFF) check .
 
 test:
-	$(PYTHON) -m pytest --cov=app --cov-report=term-missing
+	$(PYTHON) -m pytest --basetemp=.test-tmp/api --cov=app --cov-report=term-missing
 
 migrate:
 	$(ALEMBIC) upgrade head
@@ -64,6 +66,18 @@ controller-test:
 controller-integration:
 	cd controller && KUBEBUILDER_ASSETS="$$($(GO) run sigs.k8s.io/controller-runtime/tools/setup-envtest@$(SETUP_ENVTEST_VERSION) use --bin-dir bin/k8s --print path $(ENVTEST_K8S_VERSION))" $(GO) test ./internal/controller -run Envtest -count=1
 
+runtime-install:
+	$(PYTHON) -m pip install -e './runtime[dev]'
+
+runtime-format:
+	$(RUFF) format runtime
+
+runtime-lint:
+	$(RUFF) check runtime
+
+runtime-test:
+	$(PYTHON) -m pytest runtime/tests --basetemp=.test-tmp/runtime --cov=runtime/runtime_app --cov-report=term-missing
+
 kind-create:
 	$(KIND) create cluster --name $(KIND_CLUSTER_NAME) --image $(KIND_NODE_IMAGE) --config deploy/kind/config.yaml --wait 120s
 
@@ -73,9 +87,11 @@ kind-delete:
 kind-build:
 	docker build --tag $(CONTROL_API_IMAGE) .
 	docker build --file controller/Dockerfile --tag $(CONTROLLER_IMAGE) controller
+	docker build --build-arg MODEL_VERSION=v1 --tag $(MODEL_RUNTIME_V1_IMAGE) runtime
+	docker build --build-arg MODEL_VERSION=v2 --tag $(MODEL_RUNTIME_V2_IMAGE) runtime
 
 kind-load:
-	$(KIND) load docker-image --name $(KIND_CLUSTER_NAME) $(CONTROL_API_IMAGE) $(CONTROLLER_IMAGE)
+	$(KIND) load docker-image --name $(KIND_CLUSTER_NAME) $(CONTROL_API_IMAGE) $(CONTROLLER_IMAGE) $(MODEL_RUNTIME_V1_IMAGE) $(MODEL_RUNTIME_V2_IMAGE)
 
 kind-install:
 	$(KUBECTL) apply --kustomize controller/config/default
