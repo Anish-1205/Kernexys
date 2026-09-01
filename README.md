@@ -70,3 +70,16 @@ identifier with different content returns `409 immutable_model_version`.
 
 Additional setup, configuration, and current validation limits are documented in
 [Local development](docs/development.md).
+
+## Docker development stack
+
+Copy `.env.example` to `.env`, replace the placeholder password, and run:
+
+```bash
+docker compose up --build --detach --wait
+curl http://127.0.0.1:8000/health/ready
+```
+
+Compose starts PostgreSQL, runs migrations to completion, and then starts the API.
+`docker compose down` preserves database data. `make container-clean` is explicitly
+destructive and also removes the local PostgreSQL volume.

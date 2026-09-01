@@ -1,0 +1,77 @@
+name: kernexys
+
+services:
+  postgres:
+    image: postgres:17.6-alpine3.22
+    environment:
+      POSTGRES_DB: kernexys
+      POSTGRES_USER: kernexys
+      POSTGRES_PASSWORD: ${KERNEXYS_POSTGRES_PASSWORD:?set KERNEXYS_POSTGRES_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kernexys -d kernexys"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    ports:
+      - "127.0.0.1:5432:5432"
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: .
+      target: runtime
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KERNEXYS_DATABASE_URL: postgresql+asyncpg://kernexys:${KERNEXYS_POSTGRES_PASSWORD}@postgres:5432/kernexys
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+
+  api:
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      KERNEXYS_DATABASE_URL: postgresql+asyncpg://kernexys:${KERNEXYS_POSTGRES_PASSWORD}@postgres:5432/kernexys
+      KERNEXYS_LOG_LEVEL: ${KERNEXYS_LOG_LEVEL:-INFO}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2).read()
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    stop_grace_period: 25s
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cpus: 1.0
+    mem_limit: 512m
+
+volumes:
+  postgres-data:

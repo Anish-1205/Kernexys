@@ -1,4 +1,4 @@
-.PHONY: install format lint test migrate run
+.PHONY: install format lint test migrate run container-build container-up container-down container-clean
 
 PYTHON ?= .venv/bin/python
 RUFF ?= .venv/bin/ruff
@@ -24,3 +24,16 @@ migrate:
 
 run:
 	$(PYTHON) -m app
+
+container-build:
+	docker compose build
+
+container-up:
+	docker compose up --build --detach --wait
+
+container-down:
+	docker compose down
+
+# Explicitly destructive: also deletes the local PostgreSQL volume.
+container-clean:
+	docker compose down --volumes
