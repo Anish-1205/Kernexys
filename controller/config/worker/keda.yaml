@@ -1,0 +1,40 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: kernexys-worker
+  namespace: kernexys-workers
+spec:
+  scaleTargetRef:
+    name: kernexys-worker
+    kind: Deployment
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  # Graceful termination: wait for active jobs to complete
+  fallback:
+    failureThreshold: 3
+    replicas: 2
+  # Use Redis list length for scaling
+  triggers:
+  - type: redis
+    metadata:
+      address: "redis.kernexys-system:6379"
+      # The "queued" list holds job IDs awaiting processing
+      listName: "kernexys:inference:queued"
+      listLength: "5"
+      dbIndex: "0"
+      passwordFromEnv: "REDIS_PASSWORD"
+    authenticationRef:
+      name: kernexys-redis-auth
+  cooldownPeriod: 30
+  pollingInterval: 15
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: kernexys-redis-auth
+  namespace: kernexys-workers
+spec:
+  secretTargetRef:
+  - parameter: password
+    name: kernexys-redis
+    key: password

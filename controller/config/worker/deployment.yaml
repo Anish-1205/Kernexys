@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kernexys-worker
+  namespace: kernexys-workers
+  labels:
+    app: kernexys-worker
+    version: v1
+spec:
+  replicas: 1  # KEDA will manage this
+  selector:
+    matchLabels:
+      app: kernexys-worker
+  template:
+    metadata:
+      labels:
+        app: kernexys-worker
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+    spec:
+      serviceAccountName: kernexys-worker
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 35
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534  # nobody
+        fsReadOnlyRootFilesystem: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: worker
+        image: kernexys:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - kernexys-worker
+        env:
+        - name: KERNEXYS_REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: kernexys-redis
+              key: url
+        - name: KERNEXYS_ASYNC_WORKER_CONCURRENCY
+          value: "4"
+        - name: KERNEXYS_ASYNC_INFERENCE_TIMEOUT_SECONDS
+          value: "30"
+        - name: KERNEXYS_LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - ps aux | grep kernexys-worker | grep -v grep
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: var-tmp
+          mountPath: /var/tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 16Mi
+      - name: var-tmp
+        emptyDir:
+          sizeLimit: 16Mi
