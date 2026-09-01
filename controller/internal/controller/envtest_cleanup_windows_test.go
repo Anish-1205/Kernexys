@@ -116,5 +116,9 @@ func terminateProcessIfExact(processID uint32, targets map[string]struct{}) erro
 }
 
 func normalizeWindowsPath(path string) string {
-	return strings.ToLower(strings.TrimPrefix(filepath.Clean(path), `\\?\`))
+	normalized := strings.ToLower(strings.TrimPrefix(filepath.Clean(path), `\\?\`))
+	if filepath.Ext(normalized) == "" {
+		normalized += ".exe"
+	}
+	return normalized
 }

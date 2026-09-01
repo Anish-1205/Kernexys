@@ -3,6 +3,9 @@ from __future__ import annotations
 import re
 
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
+
+from app.database import get_session
 
 
 def test_liveness_and_readiness(client: TestClient) -> None:
@@ -41,3 +44,27 @@ def test_request_body_is_bounded(client: TestClient) -> None:
         "request_id": "oversize-test",
         "details": None,
     }
+
+
+def test_database_outage_is_sanitized(client: TestClient) -> None:
+    class UnavailableSession:
+        async def scalars(self, *_args: object, **_kwargs: object) -> None:
+            raise OperationalError("SELECT models", {}, RuntimeError("password=secret"))
+
+    async def unavailable_session():  # type: ignore[no-untyped-def]
+        yield UnavailableSession()
+
+    client.app.dependency_overrides[get_session] = unavailable_session
+    try:
+        response = client.get("/v1/models", headers={"x-request-id": "database-outage"})
+    finally:
+        client.app.dependency_overrides.pop(get_session)
+
+    assert response.status_code == 503
+    assert response.json()["error"] == {
+        "code": "database_unavailable",
+        "message": "The model registry database is unavailable.",
+        "request_id": "database-outage",
+        "details": None,
+    }
+    assert "secret" not in response.text

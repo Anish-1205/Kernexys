@@ -10,6 +10,11 @@ small synchronous-runtime desired state:
 - one to 100 fixed replicas;
 - container resource requests and limits.
 
+If both requests or both limits are omitted, the controller applies conservative
+runtime defaults (requests: `100m` CPU/`128Mi` memory; limits: `1` CPU/`512Mi`
+memory). This protects both API-created and direct `kubectl` resources; explicit
+values remain unchanged.
+
 The CRD applies defaults for one replica and port `8080`, validates names,
 versions, image length, replica bounds, and port bounds, and exposes the status
 subresource. Runtime validation also rejects whitespace in image references,

@@ -54,6 +54,19 @@ func TestFirstReconciliationCreatesOwnedResourcesAndStatus(t *testing.T) {
 	if got := *deployment.Spec.Replicas; got != 1 {
 		t.Fatalf("replicas = %d, want 1", got)
 	}
+	resources := deployment.Spec.Template.Spec.Containers[0].Resources
+	if got := resources.Requests.Cpu().String(); got != "100m" {
+		t.Fatalf("default CPU request = %q, want 100m", got)
+	}
+	if got := resources.Requests.Memory().String(); got != "128Mi" {
+		t.Fatalf("default memory request = %q, want 128Mi", got)
+	}
+	if got := resources.Limits.Cpu().String(); got != "1" {
+		t.Fatalf("default CPU limit = %q, want 1", got)
+	}
+	if got := resources.Limits.Memory().String(); got != "512Mi" {
+		t.Fatalf("default memory limit = %q, want 512Mi", got)
+	}
 	if got := service.Spec.Ports[0].TargetPort.String(); got != "http" {
 		t.Fatalf("service target port = %q, want http", got)
 	}

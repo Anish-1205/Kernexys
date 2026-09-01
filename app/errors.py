@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.logging_config import request_id_context
+
+logger = logging.getLogger("kernexys.dependencies")
 
 
 class ApiError(Exception):
@@ -71,3 +75,12 @@ def install_error_handlers(app: FastAPI) -> None:
     async def handle_http_error(_request: Request, exc: HTTPException) -> JSONResponse:
         message = exc.detail if isinstance(exc.detail, str) else "The request failed."
         return error_response(exc.status_code, "http_error", message, exc.detail)
+
+    @app.exception_handler(SQLAlchemyError)
+    async def handle_database_error(_request: Request, exc: SQLAlchemyError) -> JSONResponse:
+        logger.error("database_operation_failed", exc_info=exc)
+        return error_response(
+            503,
+            "database_unavailable",
+            "The model registry database is unavailable.",
+        )

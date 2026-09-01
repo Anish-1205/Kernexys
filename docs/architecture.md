@@ -104,8 +104,8 @@ and drift-repair E2E behavior remain unverified.
 - Controller process crash: Kubernetes retains CRs, Deployments, and Services;
   after restart, watches resynchronize and idempotent reconciliation resumes.
 - PostgreSQL unavailable: liveness remains healthy, readiness returns `503`, and
-  registry requests fail. Existing Kubernetes workloads have no PostgreSQL
-  dependency.
+  registry requests return a sanitized `database_unavailable` `503`. Existing
+  Kubernetes workloads have no PostgreSQL dependency.
 - Kubernetes API unavailable: when deployment integration is enabled, readiness
   returns `503` and deployment operations fail with a sanitized dependency error;
   registry data and existing inference workloads remain intact.
@@ -121,5 +121,8 @@ and drift-repair E2E behavior remain unverified.
   `413` before endpoint parsing.
 - Runtime process crash: its Deployment restarts the pod; other ready replicas
   continue serving through the Service.
+- Omitted runtime resources: the controller supplies conservative defaults of
+  `100m` CPU and `128Mi` memory requests with `1` CPU and `512Mi` memory limits.
+  Explicit CR values remain authoritative.
 - Registry/API/PostgreSQL outage: an already-running synchronous runtime keeps
   serving because its artifact and model weights are in the OCI image.

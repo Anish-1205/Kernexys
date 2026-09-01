@@ -36,16 +36,18 @@ def create_app(
         application.state.session_factory = create_session_factory(database_engine)
         owns_gateway = deployment_gateway is None and resolved_settings.kubernetes_enabled
         gateway = deployment_gateway
-        if gateway is None and resolved_settings.kubernetes_enabled:
-            gateway = await KubernetesDeploymentGateway.create(resolved_settings)
-        application.state.deployment_gateway = gateway
         try:
+            if gateway is None and resolved_settings.kubernetes_enabled:
+                gateway = await KubernetesDeploymentGateway.create(resolved_settings)
+            application.state.deployment_gateway = gateway
             yield
         finally:
-            if owns_gateway and gateway is not None:
-                await gateway.close()
-            if owns_engine:
-                await database_engine.dispose()
+            try:
+                if owns_gateway and gateway is not None:
+                    await gateway.close()
+            finally:
+                if owns_engine:
+                    await database_engine.dispose()
 
     application = FastAPI(
         title="Kernexys Control API",

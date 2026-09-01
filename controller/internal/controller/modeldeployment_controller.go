@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,9 +33,13 @@ const (
 	instanceLabel  = "app.kubernetes.io/instance"
 	nameLabel      = "app.kubernetes.io/name"
 
-	managedByValue = "kernexys-controller"
-	runtimeName    = "model-runtime"
-	defaultPort    = int32(8080)
+	managedByValue       = "kernexys-controller"
+	runtimeName          = "model-runtime"
+	defaultPort          = int32(8080)
+	defaultCPURequest    = "100m"
+	defaultMemoryRequest = "128Mi"
+	defaultCPULimit      = "1"
+	defaultMemoryLimit   = "512Mi"
 )
 
 // ModelDeploymentReconciler converges controller-owned workloads to ModelDeployment specs.
@@ -283,6 +288,7 @@ func mutateDeployment(modelDeployment *platformv1alpha1.ModelDeployment, deploym
 	allowPrivilegeEscalation := false
 	automountServiceAccountToken := false
 	enableServiceLinks := false
+	resources := effectiveResources(modelDeployment)
 
 	deployment.Labels = labels
 	deployment.Spec = appsv1.DeploymentSpec{
@@ -341,8 +347,8 @@ func mutateDeployment(modelDeployment *platformv1alpha1.ModelDeployment, deploym
 					},
 					Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: port, Protocol: corev1.ProtocolTCP}},
 					Resources: corev1.ResourceRequirements{
-						Limits:   modelDeployment.Spec.Resources.Limits.DeepCopy(),
-						Requests: modelDeployment.Spec.Resources.Requests.DeepCopy(),
+						Limits:   resources.Limits,
+						Requests: resources.Requests,
 					},
 					StartupProbe:   httpProbe("/health/ready", port, 30),
 					LivenessProbe:  httpProbe("/health/live", port, 3),
@@ -351,6 +357,26 @@ func mutateDeployment(modelDeployment *platformv1alpha1.ModelDeployment, deploym
 			},
 		},
 	}
+}
+
+func effectiveResources(modelDeployment *platformv1alpha1.ModelDeployment) corev1.ResourceRequirements {
+	resources := corev1.ResourceRequirements{
+		Limits:   modelDeployment.Spec.Resources.Limits.DeepCopy(),
+		Requests: modelDeployment.Spec.Resources.Requests.DeepCopy(),
+	}
+	if len(resources.Requests) == 0 {
+		resources.Requests = corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(defaultCPURequest),
+			corev1.ResourceMemory: resource.MustParse(defaultMemoryRequest),
+		}
+	}
+	if len(resources.Limits) == 0 {
+		resources.Limits = corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(defaultCPULimit),
+			corev1.ResourceMemory: resource.MustParse(defaultMemoryLimit),
+		}
+	}
+	return resources
 }
 
 func desiredService(modelDeployment *platformv1alpha1.ModelDeployment) *corev1.Service {
