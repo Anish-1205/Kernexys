@@ -56,6 +56,13 @@ class Settings:
     kubernetes_kubeconfig: str | None = None
     kubernetes_context: str | None = None
     kubernetes_request_timeout_seconds: int = 5
+    async_inference_enabled: bool = False
+    redis_url: str = "redis://localhost:6379/0"
+    async_queue_capacity: int = 1_000
+    async_job_ttl_seconds: int = 3_600
+    redis_socket_timeout_seconds: int = 5
+    async_worker_concurrency: int = 4
+    async_inference_timeout_seconds: int = 30
 
     def __post_init__(self) -> None:
         if self.kubernetes_config_mode not in {"in-cluster", "kubeconfig"}:
@@ -97,5 +104,14 @@ class Settings:
             kubernetes_context=os.getenv("KERNEXYS_KUBERNETES_CONTEXT"),
             kubernetes_request_timeout_seconds=_positive_int(
                 "KERNEXYS_KUBERNETES_REQUEST_TIMEOUT_SECONDS", 5
+            ),
+            async_inference_enabled=_boolean("KERNEXYS_ASYNC_INFERENCE_ENABLED", False),
+            redis_url=os.getenv("KERNEXYS_REDIS_URL", "redis://localhost:6379/0"),
+            async_queue_capacity=_positive_int("KERNEXYS_ASYNC_QUEUE_CAPACITY", 1_000),
+            async_job_ttl_seconds=_positive_int("KERNEXYS_ASYNC_JOB_TTL_SECONDS", 3_600),
+            redis_socket_timeout_seconds=_positive_int("KERNEXYS_REDIS_SOCKET_TIMEOUT_SECONDS", 5),
+            async_worker_concurrency=_positive_int("KERNEXYS_ASYNC_WORKER_CONCURRENCY", 4),
+            async_inference_timeout_seconds=_positive_int(
+                "KERNEXYS_ASYNC_INFERENCE_TIMEOUT_SECONDS", 30
             ),
         )

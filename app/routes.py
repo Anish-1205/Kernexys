@@ -45,6 +45,11 @@ async def ready(request: Request, session: Session) -> dict[str, str]:
                 if gateway is None:
                     raise RuntimeError("Kubernetes gateway is not initialized")
                 await gateway.check_ready()
+            if request.app.state.settings.async_inference_enabled:
+                queue = request.app.state.async_queue
+                if queue is None:
+                    raise RuntimeError("Async queue is not initialized")
+                await queue.check_ready()
     except Exception as exc:
         raise ApiError(
             503, "not_ready", "A required control-plane dependency is unavailable."

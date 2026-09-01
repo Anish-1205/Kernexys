@@ -36,6 +36,12 @@ $env:KERNEXYS_DATABASE_URL = "postgresql+asyncpg://kernexys:kernexys@localhost:5
 | `KERNEXYS_KUBECONFIG` | client default | Optional kubeconfig path |
 | `KERNEXYS_KUBERNETES_CONTEXT` | current context | Optional kubeconfig context |
 | `KERNEXYS_KUBERNETES_REQUEST_TIMEOUT_SECONDS` | `5` | Per-call Kubernetes deadline |
+| `KERNEXYS_ASYNC_INFERENCE_ENABLED` | `false` | Enable Redis-backed jobs and readiness |
+| `KERNEXYS_REDIS_URL` | `redis://localhost:6379/0` | Async queue connection URL |
+| `KERNEXYS_ASYNC_QUEUE_CAPACITY` | `1000` | Waiting jobs before `429` backpressure |
+| `KERNEXYS_ASYNC_JOB_TTL_SECONDS` | `3600` | Job and result retention |
+| `KERNEXYS_ASYNC_WORKER_CONCURRENCY` | `4` | Concurrent worker consumers |
+| `KERNEXYS_ASYNC_INFERENCE_TIMEOUT_SECONDS` | `30` | Worker runtime-call deadline |
 
 Every positive numeric setting is validated at startup. Unknown JSON fields and
 invalid resource names are rejected. Caller-supplied `X-Request-ID` values are

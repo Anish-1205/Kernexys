@@ -82,10 +82,19 @@ count and latency metrics. Uvicorn bounds concurrent accepted work and drains on
 termination. See [Reference runtime](runtime.md) and
 [ADR 0004](adr/0004-oci-model-runtime-images.md).
 
+### Asynchronous inference queue
+
+The optional async API writes TTL-bound jobs to a capacity-limited Redis queue.
+Workers atomically claim jobs through a processing list, call the already-running
+runtime endpoint with a finite timeout, and persist sanitized success/failure
+state. Startup requeues abandoned claims, providing at-least-once delivery.
+Redis failure does not affect synchronous inference. See
+[ADR 0005](adr/0005-redis-async-inference.md).
+
 ### Not yet implemented
 
-The Redis/KEDA async path, observability stack, and progressive delivery are
-future vertical slices. The kind manifests and runtime images have not been built
+KEDA reconciliation for the async worker, the observability stack, and progressive
+delivery are future vertical slices. The kind manifests and runtime images have not been built
 on this host, so real-cluster garbage collection, workload readiness, inference,
 and drift-repair E2E behavior remain unverified.
 

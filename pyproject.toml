@@ -15,6 +15,7 @@ dependencies = [
     "fastapi>=0.116,<1",
     "kubernetes-asyncio>=36.1,<37",
     "pydantic>=2.11,<3",
+    "redis>=8.1,<9",
     "sqlalchemy[asyncio]>=2.0.43,<3",
     "uvicorn>=0.35,<1",
 ]
@@ -31,6 +32,7 @@ dev = [
 [project.scripts]
 kernexys-api = "app.__main__:main"
 kernexysctl = "app.cli:main"
+kernexys-worker = "app.worker:main"
 
 [tool.setuptools.packages.find]
 include = ["app*"]

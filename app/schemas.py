@@ -184,6 +184,19 @@ class RollbackRequest(BaseModel):
     version: VersionName
 
 
+class AsyncInferenceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=4096)
+
+
+class AsyncInferenceJob(BaseModel):
+    job_id: str
+    status: str
+    result: dict[str, Any] | None = None
+    error: str | None = None
+
+
 class DeploymentDeleteResponse(BaseModel):
     deleted: bool
     name: str

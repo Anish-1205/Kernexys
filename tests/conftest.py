@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from app.async_queue import EnqueueResult
 from app.config import Settings
 from app.database import create_database_engine
 from app.db_models import Base
@@ -100,6 +101,32 @@ class FakeDeploymentGateway:
             raise self.operation_error
 
 
+class FakeInferenceQueue:
+    def __init__(self) -> None:
+        self.jobs: dict[str, dict[str, str]] = {}
+        self.full = False
+        self.closed = False
+
+    async def check_ready(self) -> None:
+        return None
+
+    async def enqueue(self, job_id: str, payload: dict[str, Any]) -> EnqueueResult:
+        if self.full:
+            return EnqueueResult(created=False, full=True)
+        if job_id in self.jobs:
+            if self.jobs[job_id]["payload"] != str(payload):
+                return EnqueueResult(created=False, full=False, conflict=True)
+            return EnqueueResult(created=False, full=False)
+        self.jobs[job_id] = {"status": "queued", "payload": str(payload)}
+        return EnqueueResult(created=True, full=False)
+
+    async def get(self, job_id: str) -> dict[str, str] | None:
+        return deepcopy(self.jobs.get(job_id))
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
@@ -140,4 +167,34 @@ def deployment_client(
     gateway = FakeDeploymentGateway()
     with TestClient(create_app(settings, engine=engine, deployment_gateway=gateway)) as test_client:
         yield test_client, gateway
+    asyncio.run(engine.dispose())
+
+
+@pytest.fixture
+def async_client(
+    tmp_path: Path,
+) -> Iterator[tuple[TestClient, FakeDeploymentGateway, FakeInferenceQueue]]:
+    database_path = (tmp_path / "async.db").as_posix()
+    settings = Settings(
+        database_url=f"sqlite+aiosqlite:///{database_path}",
+        kubernetes_enabled=True,
+        async_inference_enabled=True,
+    )
+    engine = create_database_engine(settings)
+
+    async def create_schema() -> None:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+
+    asyncio.run(create_schema())
+    gateway = FakeDeploymentGateway()
+    queue = FakeInferenceQueue()
+    application = create_app(
+        settings,
+        engine=engine,
+        deployment_gateway=gateway,
+        async_queue=queue,  # type: ignore[arg-type]
+    )
+    with TestClient(application) as test_client:
+        yield test_client, gateway, queue
     asyncio.run(engine.dispose())

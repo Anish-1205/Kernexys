@@ -23,12 +23,15 @@ currently include:
 - deterministic CPU-only `v1` and `v2` reference runtime artifacts with health,
   readiness, bounded inference, request correlation, and Prometheus metrics;
 - an idempotent deployment API and small `kernexysctl` CLI that validate registry
-  versions and manage only `ModelDeployment` CRs through Kubernetes.
+  versions and manage only `ModelDeployment` CRs through Kubernetes;
+- a bounded Redis async-inference API and at-least-once worker with idempotency,
+  backpressure, finite runtime timeouts, result expiry, and crash recovery.
 
-The async inference and later platform gates are not yet implemented. The kind
+KEDA autoscaling and later platform gates are not yet implemented. The kind
 workflow is checked in but has not run on this host because Docker, kind, and a
 host kubectl installation are absent. See [Architecture](docs/architecture.md),
-[Deployments](docs/deployments.md), [Controller](docs/controller.md),
+[Deployments](docs/deployments.md), [Async inference](docs/async-inference.md),
+[Controller](docs/controller.md),
 [Reference runtime](docs/runtime.md), and [Local kind environment](docs/kind.md)
 for the implemented boundaries and exact validation status.
 

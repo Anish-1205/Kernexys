@@ -9,6 +9,8 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app import __version__
+from app.async_queue import RedisInferenceQueue
+from app.async_routes import async_router
 from app.config import Settings
 from app.database import create_database_engine, create_session_factory
 from app.deployment_routes import deployment_router
@@ -23,6 +25,7 @@ def create_app(
     settings: Settings | None = None,
     engine: AsyncEngine | None = None,
     deployment_gateway: DeploymentGateway | None = None,
+    async_queue: RedisInferenceQueue | None = None,
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_env()
     configure_logging(resolved_settings.log_level)
@@ -36,15 +39,29 @@ def create_app(
         application.state.session_factory = create_session_factory(database_engine)
         owns_gateway = deployment_gateway is None and resolved_settings.kubernetes_enabled
         gateway = deployment_gateway
+        owns_queue = async_queue is None and resolved_settings.async_inference_enabled
+        queue = async_queue
         try:
             if gateway is None and resolved_settings.kubernetes_enabled:
                 gateway = await KubernetesDeploymentGateway.create(resolved_settings)
             application.state.deployment_gateway = gateway
+            if queue is None and resolved_settings.async_inference_enabled:
+                queue = RedisInferenceQueue.create(
+                    resolved_settings.redis_url,
+                    resolved_settings.async_queue_capacity,
+                    resolved_settings.async_job_ttl_seconds,
+                    resolved_settings.redis_socket_timeout_seconds,
+                )
+            application.state.async_queue = queue
             yield
         finally:
             try:
-                if owns_gateway and gateway is not None:
-                    await gateway.close()
+                try:
+                    if owns_queue and queue is not None:
+                        await queue.close()
+                finally:
+                    if owns_gateway and gateway is not None:
+                        await gateway.close()
             finally:
                 if owns_engine:
                     await database_engine.dispose()
@@ -63,6 +80,7 @@ def create_app(
     application.include_router(health_router)
     application.include_router(registry_router)
     application.include_router(deployment_router)
+    application.include_router(async_router)
     return application
 
 
