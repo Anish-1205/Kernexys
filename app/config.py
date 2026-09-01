@@ -19,6 +19,18 @@ def _positive_int(name: str, default: int) -> int:
     return value
 
 
+def _boolean(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean")
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Validated process configuration.
@@ -39,6 +51,15 @@ class Settings:
     server_limit_concurrency: int = 100
     server_timeout_keep_alive_seconds: int = 5
     server_timeout_graceful_shutdown_seconds: int = 20
+    kubernetes_enabled: bool = False
+    kubernetes_config_mode: str = "in-cluster"
+    kubernetes_kubeconfig: str | None = None
+    kubernetes_context: str | None = None
+    kubernetes_request_timeout_seconds: int = 5
+
+    def __post_init__(self) -> None:
+        if self.kubernetes_config_mode not in {"in-cluster", "kubeconfig"}:
+            raise ValueError("kubernetes_config_mode must be 'in-cluster' or 'kubeconfig'")
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -67,5 +88,14 @@ class Settings:
             ),
             server_timeout_graceful_shutdown_seconds=_positive_int(
                 "KERNEXYS_SERVER_TIMEOUT_GRACEFUL_SHUTDOWN_SECONDS", 20
+            ),
+            kubernetes_enabled=_boolean("KERNEXYS_KUBERNETES_ENABLED", False),
+            kubernetes_config_mode=os.getenv(
+                "KERNEXYS_KUBERNETES_CONFIG_MODE", "in-cluster"
+            ).lower(),
+            kubernetes_kubeconfig=os.getenv("KERNEXYS_KUBECONFIG"),
+            kubernetes_context=os.getenv("KERNEXYS_KUBERNETES_CONTEXT"),
+            kubernetes_request_timeout_seconds=_positive_int(
+                "KERNEXYS_KUBERNETES_REQUEST_TIMEOUT_SECONDS", 5
             ),
         )

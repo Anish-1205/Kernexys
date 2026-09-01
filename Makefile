@@ -1,4 +1,4 @@
-.PHONY: install format lint test migrate run container-build container-up container-down container-clean controller-generate controller-format controller-vet controller-test controller-integration runtime-install runtime-format runtime-lint runtime-test kind-create kind-delete kind-build kind-load kind-install kind-validate
+.PHONY: install format lint test migrate run container-build container-up container-down container-clean controller-generate controller-format controller-vet controller-test controller-integration api-kubernetes-integration runtime-install runtime-format runtime-lint runtime-test kind-create kind-delete kind-build kind-load kind-install kind-validate
 
 PYTHON ?= .venv/bin/python
 RUFF ?= .venv/bin/ruff
@@ -65,6 +65,9 @@ controller-test:
 
 controller-integration:
 	cd controller && KUBEBUILDER_ASSETS="$$($(GO) run sigs.k8s.io/controller-runtime/tools/setup-envtest@$(SETUP_ENVTEST_VERSION) use --bin-dir bin/k8s --print path $(ENVTEST_K8S_VERSION))" $(GO) test ./internal/controller -run Envtest -count=1
+
+api-kubernetes-integration:
+	cd controller && KUBEBUILDER_ASSETS="$$($(GO) run sigs.k8s.io/controller-runtime/tools/setup-envtest@$(SETUP_ENVTEST_VERSION) use --bin-dir bin/k8s --print path $(ENVTEST_K8S_VERSION))" KERNEXYS_TEST_PYTHON="$(abspath $(PYTHON))" $(GO) test ./internal/controller -tags=integration -run APIKubernetes -count=1 -v
 
 runtime-install:
 	$(PYTHON) -m pip install -e './runtime[dev]'

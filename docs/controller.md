@@ -34,7 +34,9 @@ responsible for children when the CR is deleted, so there is no finalizer.
 
 Cluster-wide RBAC is limited to watching ModelDeployments, reconciling their
 Deployments and Services, and updating status. Leader-election Lease access is a
-separate namespaced Role rather than a cluster-wide permission.
+separate namespaced Role rather than a cluster-wide permission. The control API
+uses a different service account and ClusterRole with only get, patch, and delete
+on ModelDeployments; it has no workload or status-write permission.
 
 Conditions follow Kubernetes conventions:
 
@@ -58,6 +60,7 @@ make controller-format
 make controller-vet
 make controller-test
 make controller-integration
+make api-kubernetes-integration
 ```
 
 The unit suite covers first and repeated reconciliation, restart, drift, missing
@@ -66,3 +69,8 @@ deletion handling. Envtest verifies CRD defaulting/validation and reconciliation
 against real kube-apiserver and etcd binaries. Actual garbage collection and the
 full kubectl-to-ready-runtime path require the kind E2E workflow and have not run
 on the current host.
+
+The cross-language API integration target starts the same real control plane,
+loads the generated CRD, invokes the Python API through its kubeconfig client,
+and verifies server-side apply, steady-state resourceVersion stability, read, and
+delete. It does not run the controller manager or a model pod.

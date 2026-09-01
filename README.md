@@ -21,14 +21,16 @@ currently include:
   real envtest kube-apiserver and etcd;
 - pinned kind configuration and local image build/load/install commands;
 - deterministic CPU-only `v1` and `v2` reference runtime artifacts with health,
-  readiness, bounded inference, request correlation, and Prometheus metrics.
+  readiness, bounded inference, request correlation, and Prometheus metrics;
+- an idempotent deployment API and small `kernexysctl` CLI that validate registry
+  versions and manage only `ModelDeployment` CRs through Kubernetes.
 
-The deployment API and later reliability features are not yet implemented. The
-kind workflow is checked in but has not run on this host because Docker, kind, and
-a host kubectl installation are absent. See [Architecture](docs/architecture.md),
-[Controller](docs/controller.md), [Reference runtime](docs/runtime.md), and
-[Local kind environment](docs/kind.md) for the implemented boundaries and exact
-validation status.
+The async inference and later platform gates are not yet implemented. The kind
+workflow is checked in but has not run on this host because Docker, kind, and a
+host kubectl installation are absent. See [Architecture](docs/architecture.md),
+[Deployments](docs/deployments.md), [Controller](docs/controller.md),
+[Reference runtime](docs/runtime.md), and [Local kind environment](docs/kind.md)
+for the implemented boundaries and exact validation status.
 
 ## Run the current slice
 
@@ -72,6 +74,20 @@ curl -X PUT http://localhost:8000/v1/models/sentiment/versions/v1 \
 Repeating either request with identical content is safe. Reusing a model-version
 identifier with different content returns `409 immutable_model_version`.
 
+With a Kubernetes API and the CRD available, enable kubeconfig mode and declare
+the registered version:
+
+```bash
+export KERNEXYS_KUBERNETES_ENABLED=true
+export KERNEXYS_KUBERNETES_CONFIG_MODE=kubeconfig
+export KERNEXYS_KUBECONFIG="$HOME/.kube/config"
+.venv/bin/kernexysctl deploy sentiment \
+  --model sentiment --version v1 --request cpu=50m --request memory=64Mi
+.venv/bin/kernexysctl status sentiment
+```
+
+The API server-side-applies the CR; it never creates Deployments or Services.
+
 ## Validate
 
 ```bash
@@ -91,6 +107,7 @@ make controller-format
 make controller-vet
 make controller-test
 make controller-integration
+make api-kubernetes-integration
 ```
 
 Install and exercise the reference runtime independently of Docker:

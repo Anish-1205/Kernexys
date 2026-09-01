@@ -31,6 +31,11 @@ $env:KERNEXYS_DATABASE_URL = "postgresql+asyncpg://kernexys:kernexys@localhost:5
 | `KERNEXYS_SERVER_LIMIT_CONCURRENCY` | `100` | Accepted concurrent work bound |
 | `KERNEXYS_SERVER_TIMEOUT_KEEP_ALIVE_SECONDS` | `5` | Idle keep-alive timeout |
 | `KERNEXYS_SERVER_TIMEOUT_GRACEFUL_SHUTDOWN_SECONDS` | `20` | Shutdown drain deadline |
+| `KERNEXYS_KUBERNETES_ENABLED` | `false` | Enable deployment CR operations and readiness check |
+| `KERNEXYS_KUBERNETES_CONFIG_MODE` | `in-cluster` | Credential source: `in-cluster` or `kubeconfig` |
+| `KERNEXYS_KUBECONFIG` | client default | Optional kubeconfig path |
+| `KERNEXYS_KUBERNETES_CONTEXT` | current context | Optional kubeconfig context |
+| `KERNEXYS_KUBERNETES_REQUEST_TIMEOUT_SECONDS` | `5` | Per-call Kubernetes deadline |
 
 Every positive numeric setting is validated at startup. Unknown JSON fields and
 invalid resource names are rejected. Caller-supplied `X-Request-ID` values are
@@ -68,6 +73,10 @@ capabilities dropped, `no-new-privileges`, a bounded temporary filesystem, CPU a
 memory limits, and a 25-second termination grace period. The image's health check
 tests process liveness; Compose tightens it to database-backed readiness.
 
+Compose leaves Kubernetes integration disabled. To exercise deployments against
+kind, run the API from the host with kubeconfig mode as documented in
+[Deployments](deployments.md), or use a later Kubernetes-packaged API deployment.
+
 `docker compose down` preserves the named database volume. Running
 `docker compose down --volumes` deletes local registry data and is intentionally
 exposed only as the clearly named `make container-clean` target.
@@ -86,6 +95,7 @@ child or status writes. Run the real API-server integration test with:
 
 ```bash
 make controller-integration
+make api-kubernetes-integration
 ```
 
 That target pins `setup-envtest` and Kubernetes `1.37.0`, then starts local
@@ -93,6 +103,11 @@ kube-apiserver and etcd processes. On Windows, controller-runtime `v0.24.1`
 cannot send its Unix shutdown signals; the test recovery code matches that exact
 failure and terminates only the kube-apiserver and etcd executable paths selected
 by the test. Other teardown failures still fail the suite.
+
+`api-kubernetes-integration` additionally passes an ephemeral kubeconfig to the
+Python control API and verifies a real server-side apply/create, idempotent repeat
+without a resourceVersion change, read, and delete. This ran successfully on the
+current host. It is an API-server integration test, not kind or workload E2E.
 
 The kind workflow and its unverified host requirements are documented in
 [Local kind environment](kind.md).

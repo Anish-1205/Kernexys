@@ -16,9 +16,8 @@ owned Kubernetes workload + Service -> model runtime
 ```
 
 The custom resource is the source of truth for deployment desired state. The
-future deployment API will validate registered model metadata and write that
-resource; it will not create Deployments, Services, Rollouts, or autoscaling
-resources.
+deployment API validates registered model metadata and writes that resource; it
+does not create Deployments, Services, Rollouts, or autoscaling resources.
 
 ## Implemented components
 
@@ -33,6 +32,21 @@ The liveness probe intentionally has no database dependency. A PostgreSQL outage
 therefore removes an API pod from service without asking Kubernetes to restart an
 otherwise healthy process. The API fails registry operations during that outage;
 already-reconciled inference workloads do not depend on this database or API.
+
+### Deployment API and CLI
+
+The FastAPI deployment routes resolve an immutable model version in PostgreSQL,
+then use strict Kubernetes server-side apply for the `ModelDeployment` only.
+Read returns the CR's desired spec and controller-owned status. Delete is
+idempotent and relies on owner-reference garbage collection. Rollback resolves a
+previous registered image while preserving replica, port, and resource settings.
+
+The API uses the `kernexys-control-api` field manager without force. A conflicting
+kubectl or other manager-owned field therefore returns `409` instead of being
+silently stolen. A resourceVersion precondition protects rollback from racing a
+concurrent update. Kubernetes errors are converted to structured, sanitized API
+errors. `kernexysctl` is a small HTTP client for deploy, status, rollback, and
+delete; it is not a second Kubernetes implementation.
 
 ### ModelDeployment controller
 
@@ -70,10 +84,10 @@ termination. See [Reference runtime](runtime.md) and
 
 ### Not yet implemented
 
-The deployment API, Redis/KEDA async path, observability stack, and progressive
-delivery are future vertical slices. The kind manifests and runtime images have
-not been built on this host, so real-cluster garbage collection, workload
-readiness, inference, and drift-repair E2E behavior remain unverified.
+The Redis/KEDA async path, observability stack, and progressive delivery are
+future vertical slices. The kind manifests and runtime images have not been built
+on this host, so real-cluster garbage collection, workload readiness, inference,
+and drift-repair E2E behavior remain unverified.
 
 ## Data ownership
 
@@ -92,6 +106,9 @@ readiness, inference, and drift-repair E2E behavior remain unverified.
 - PostgreSQL unavailable: liveness remains healthy, readiness returns `503`, and
   registry requests fail. Existing Kubernetes workloads have no PostgreSQL
   dependency.
+- Kubernetes API unavailable: when deployment integration is enabled, readiness
+  returns `503` and deployment operations fail with a sanitized dependency error;
+  registry data and existing inference workloads remain intact.
 - Invalid `ModelDeployment`: the CR receives a `Degraded=True` condition with an
   `InvalidSpec` reason and is not hot-loop retried.
 - Transient Kubernetes write failure: status is marked degraded when possible and

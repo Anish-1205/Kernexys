@@ -40,8 +40,15 @@ async def ready(request: Request, session: Session) -> dict[str, str]:
     try:
         async with asyncio.timeout(request.app.state.settings.readiness_timeout_seconds):
             await session.execute(text("SELECT 1"))
+            if request.app.state.settings.kubernetes_enabled:
+                gateway = request.app.state.deployment_gateway
+                if gateway is None:
+                    raise RuntimeError("Kubernetes gateway is not initialized")
+                await gateway.check_ready()
     except Exception as exc:
-        raise ApiError(503, "not_ready", "The database is unavailable.") from exc
+        raise ApiError(
+            503, "not_ready", "A required control-plane dependency is unavailable."
+        ) from exc
     return {"status": "ready"}
 
 
