@@ -35,19 +35,19 @@ class TestApiDeploymentSecurity:
         
         spec = deployment["spec"]["template"]["spec"]
         assert spec["securityContext"]["runAsNonRoot"] is True
-        assert spec["securityContext"]["fsReadOnlyRootFilesystem"] is True
         assert spec["securityContext"]["seccompProfile"]["type"] == "RuntimeDefault"
 
     def test_deployment_container_security(self) -> None:
         """Container should have strict security constraints."""
         docs = load_yaml(API_CONFIG_DIR / "deployment.yaml")
         deployment = [d for d in docs if d.get("kind") == "Deployment"][0]
-        
+
         container = deployment["spec"]["template"]["spec"]["containers"][0]
         sec_ctx = container["securityContext"]
-        
+
         assert sec_ctx["runAsNonRoot"] is True
         assert sec_ctx["allowPrivilegeEscalation"] is False
+        assert sec_ctx["readOnlyRootFilesystem"] is True
         assert "ALL" in sec_ctx["capabilities"]["drop"]
 
     def test_deployment_has_resource_limits(self) -> None:

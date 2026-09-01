@@ -43,7 +43,6 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534  # nobody
-        fsReadOnlyRootFilesystem: true
         seccompProfile:
           type: RuntimeDefault
       containers:

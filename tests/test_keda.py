@@ -46,8 +46,14 @@ class TestKedaDeploymentManifest:
         
         spec = deployment["spec"]["template"]["spec"]
         assert spec["securityContext"]["runAsNonRoot"] is True
-        assert spec["securityContext"]["fsReadOnlyRootFilesystem"] is True
         assert "seccompProfile" in spec["securityContext"]
+
+        container = spec["containers"][0]
+        sec_ctx = container["securityContext"]
+        assert sec_ctx["runAsNonRoot"] is True
+        assert sec_ctx["allowPrivilegeEscalation"] is False
+        assert sec_ctx["readOnlyRootFilesystem"] is True
+        assert "ALL" in sec_ctx["capabilities"]["drop"]
 
     def test_deployment_has_resource_limits(self) -> None:
         """Deployment should define resource requests and limits."""
