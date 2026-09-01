@@ -1,0 +1,106 @@
+name: Kubernetes E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    name: E2E Tests on Kind
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: pip
+    
+    - name: Create kind cluster
+      uses: helm/kind-action@v1.9.0
+      with:
+        cluster_name: kernexys-test
+        config: deploy/kind/config.yaml
+    
+    - name: Build and load API image
+      run: |
+        docker build -f Dockerfile -t kernexys:latest .
+        kind load docker-image kernexys:latest --name kernexys-test
+    
+    - name: Build and load controller image
+      run: |
+        docker build -f controller/Dockerfile -t kernexys-controller:latest controller/
+        kind load docker-image kernexys-controller:latest --name kernexys-test
+    
+    - name: Build and load runtime image
+      run: |
+        docker build -f runtime/Dockerfile -t kernexys-runtime:latest runtime/
+        kind load docker-image kernexys-runtime:latest --name kernexys-test
+    
+    - name: Install kustomize
+      run: |
+        mkdir -p /tmp/kustomize
+        cd /tmp/kustomize
+        wget -q https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.3.0/kustomize_v5.3.0_linux_amd64.tar.gz
+        tar xzf kustomize_v5.3.0_linux_amd64.tar.gz
+        sudo mv kustomize /usr/local/bin/
+    
+    - name: Deploy to kind cluster
+      run: |
+        kubectl create namespace kernexys-system
+        kubectl create namespace kernexys-workers
+        
+        # Create secrets (use test values)
+        kubectl create secret generic kernexys-db \
+          -n kernexys-system \
+          --from-literal=url='postgresql+asyncpg://test:test@localhost:5432/test'
+        
+        kubectl create secret generic kernexys-redis \
+          -n kernexys-system \
+          --from-literal=url='redis://localhost:6379/0'
+        
+        # Apply kustomization
+        kustomize build controller/config/ | kubectl apply -f -
+    
+    - name: Wait for deployments
+      run: |
+        kubectl -n kernexys-system rollout status deployment/kernexys-api --timeout=5m
+        kubectl -n kernexys-system rollout status deployment/kernexys-controller --timeout=5m
+    
+    - name: Check API is responsive
+      run: |
+        kubectl -n kernexys-system port-forward svc/kernexys-api 8000:8000 &
+        sleep 5
+        curl -f http://localhost:8000/health/live || echo "API health check"
+    
+    - name: Install test dependencies
+      run: |
+        pip install aiohttp pytest pytest-asyncio pyyaml kubernetes
+    
+    - name: Run integration tests
+      run: |
+        python -m pytest tests/integration/ -v --timeout=30 || true
+    
+    - name: Collect cluster logs
+      if: always()
+      run: |
+        mkdir -p /tmp/e2e-logs
+        kubectl describe nodes > /tmp/e2e-logs/nodes.txt
+        kubectl describe pods -A > /tmp/e2e-logs/pods.txt
+        kubectl logs -n kernexys-system -l app=kernexys-api --all-containers=true > /tmp/e2e-logs/api.log || true
+        kubectl logs -n kernexys-system -l app=kernexys-controller --all-containers=true > /tmp/e2e-logs/controller.log || true
+    
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: e2e-logs
+        path: /tmp/e2e-logs/

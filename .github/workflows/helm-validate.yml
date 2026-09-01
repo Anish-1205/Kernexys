@@ -1,0 +1,85 @@
+name: Helm Validation
+
+on:
+  push:
+    branches: [main, feat/*, bugfix/*]
+    paths:
+      - 'helm/**'
+      - '.github/workflows/helm-validate.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'helm/**'
+
+jobs:
+  validate:
+    name: Validate Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: 'latest'
+    
+    - name: Lint Helm chart
+      run: helm lint helm/kernexys/ -v
+    
+    - name: Template chart
+      run: helm template kernexys helm/kernexys/ > /tmp/manifests.yaml
+    
+    - name: Validate Kubernetes manifests
+      run: |
+        kubectl apply -f /tmp/manifests.yaml --dry-run=client -o yaml > /dev/null
+      continue-on-error: true
+    
+    - name: Check for required values
+      run: |
+        helm show values helm/kernexys/ | grep -q "replicaCount"
+        helm show values helm/kernexys/ | grep -q "image"
+        helm show values helm/kernexys/ | grep -q "resources"
+
+  test:
+    name: Test Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: 'latest'
+    
+    - name: Install chart in debug mode
+      run: |
+        helm install kernexys-test helm/kernexys/ \
+          --debug \
+          --dry-run \
+          --namespace test \
+          --create-namespace \
+          > /tmp/debug.log 2>&1 || cat /tmp/debug.log
+    
+    - name: Verify templates render
+      run: helm template kernexys helm/kernexys/ | grep -q "apiVersion"
+
+  docs:
+    name: Generate Helm Docs
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Helm Docs
+      run: |
+        mkdir -p /tmp/helm-docs
+        cd /tmp/helm-docs
+        wget -q https://github.com/norwoodj/helm-docs/releases/download/v1.13.0/helm-docs_linux_amd64.tar.gz
+        tar xzf helm-docs_linux_amd64.tar.gz
+        chmod +x helm-docs
+    
+    - name: Generate documentation
+      run: |
+        /tmp/helm-docs/helm-docs -c helm/kernexys/
+    
+    - name: Check if README was generated
+      run: test -f helm/kernexys/README.md

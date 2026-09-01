@@ -1,0 +1,92 @@
+name: Go Controller CI
+
+on:
+  push:
+    branches: [main, feat/*, bugfix/*]
+    paths:
+      - 'controller/**'
+      - '.github/workflows/go-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'controller/**'
+
+jobs:
+  lint:
+    name: Lint Go Code
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+    
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        working-directory: controller
+
+  test:
+    name: Test Go Controller
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+    
+    - name: Download dependencies
+      working-directory: controller
+      run: go mod download
+    
+    - name: Run tests
+      working-directory: controller
+      run: go test -v -race -coverprofile=coverage.out ./...
+    
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./controller/coverage.out
+        flags: controller
+        fail_ci_if_error: false
+
+  vet:
+    name: Vet Go Code
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+    
+    - name: Run go vet
+      working-directory: controller
+      run: go vet ./...
+
+  build:
+    name: Build Go Controller
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+    
+    - name: Build controller binary
+      working-directory: controller
+      run: go build -o bin/manager cmd/main.go
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: controller-binary
+        path: controller/bin/manager
