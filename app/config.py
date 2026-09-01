@@ -63,6 +63,10 @@ class Settings:
     redis_socket_timeout_seconds: int = 5
     async_worker_concurrency: int = 4
     async_inference_timeout_seconds: int = 30
+    metrics_enabled: bool = True
+    metrics_port: int = 8001
+    logging_format: str = "json"
+    logging_correlation_id_enabled: bool = True
 
     def __post_init__(self) -> None:
         if self.kubernetes_config_mode not in {"in-cluster", "kubeconfig"}:
@@ -114,4 +118,8 @@ class Settings:
             async_inference_timeout_seconds=_positive_int(
                 "KERNEXYS_ASYNC_INFERENCE_TIMEOUT_SECONDS", 30
             ),
+            metrics_enabled=_boolean("KERNEXYS_METRICS_ENABLED", True),
+            metrics_port=_positive_int("KERNEXYS_METRICS_PORT", 8001),
+            logging_format=os.getenv("KERNEXYS_LOGGING_FORMAT", "json").lower(),
+            logging_correlation_id_enabled=_boolean("KERNEXYS_LOGGING_CORRELATION_ID_ENABLED", True),
         )

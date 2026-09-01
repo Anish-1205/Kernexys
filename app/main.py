@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app import __version__
@@ -17,7 +18,9 @@ from app.deployment_routes import deployment_router
 from app.errors import install_error_handlers
 from app.kubernetes import DeploymentGateway, KubernetesDeploymentGateway
 from app.logging_config import configure_logging
+from app.metrics import MetricsCollector
 from app.middleware import RequestBodyLimitMiddleware, RequestContextMiddleware
+from app.observability import configure_logging as configure_structured_logging
 from app.routes import health_router, registry_router
 
 
@@ -29,6 +32,8 @@ def create_app(
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_env()
     configure_logging(resolved_settings.log_level)
+    if resolved_settings.logging_format == "json":
+        configure_structured_logging(resolved_settings.log_level, json_format=True)
     owns_engine = engine is None
     database_engine = engine or create_database_engine(resolved_settings)
 
@@ -37,6 +42,7 @@ def create_app(
         application.state.settings = resolved_settings
         application.state.engine = database_engine
         application.state.session_factory = create_session_factory(database_engine)
+        application.state.metrics = MetricsCollector()
         owns_gateway = deployment_gateway is None and resolved_settings.kubernetes_enabled
         gateway = deployment_gateway
         owns_queue = async_queue is None and resolved_settings.async_inference_enabled
@@ -81,6 +87,15 @@ def create_app(
     application.include_router(registry_router)
     application.include_router(deployment_router)
     application.include_router(async_router)
+
+    # Add metrics endpoint if enabled
+    if resolved_settings.metrics_enabled:
+        @application.get("/metrics")
+        async def get_metrics() -> Response:
+            """Prometheus metrics endpoint."""
+            metrics = application.state.metrics.to_prometheus_format()
+            return Response(content=metrics, media_type="text/plain; version=0.0.4")
+
     return application
 
 
