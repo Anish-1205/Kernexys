@@ -7,23 +7,15 @@ metadata:
     app: kernexys-api
     {{- include "kernexys.labels" . | nindent 4 }}
 rules:
-  # Model deployments management.
-  - apiGroups: ["platform.kernexys.io"]
-    resources: ["modeldeployments"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
-  - apiGroups: ["platform.kernexys.io"]
-    resources: ["modeldeployments/status"]
-    verbs: ["get", "patch", "update"]
-  # Read Kubernetes deployments and services for status.
-  - apiGroups: ["apps"]
-    resources: ["deployments"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["services"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["endpoints"]
-    verbs: ["get", "list", "watch"]
+  - apiGroups:
+      - platform.kernexys.io
+    resources:
+      - modeldeployments
+    verbs:
+      - create
+      - delete
+      - get
+      - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

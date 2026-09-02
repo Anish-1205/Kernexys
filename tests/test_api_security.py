@@ -1,11 +1,14 @@
 """Tests for Kernexys API deployment security configuration."""
 
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
 
 # Paths to API configuration files
 API_CONFIG_DIR = Path(__file__).parent.parent / "controller" / "config" / "api"
+HELM_CHART = Path(__file__).parent.parent / "helm" / "kernexys"
 
 
 def load_yaml(path: Path) -> list[dict]:
@@ -123,19 +126,24 @@ class TestApiRbac:
         assert sa["metadata"]["namespace"] == "kernexys-system"
 
     def test_cluster_role_permissions(self) -> None:
-        """ClusterRole should have appropriate permissions."""
+        """ClusterRole should permit only the current ModelDeployment gateway calls."""
         docs = load_yaml(API_CONFIG_DIR / "rbac.yaml")
-        role = [d for d in docs if d.get("kind") == "ClusterRole"][0]
-        
-        rules = role["rules"]
-        assert len(rules) >= 3  # At least 3 rule groups
-        
-        # Check for model deployment permissions (resource and status subresource)
-        all_resources = []
-        for rule in rules:
-            all_resources.extend(rule.get("resources", []))
-        
-        assert any("modeldeployments" in r for r in all_resources)
+        role = next(d for d in docs if d.get("kind") == "ClusterRole")
+
+        assert role["rules"] == [
+            {
+                "apiGroups": ["platform.kernexys.io"],
+                "resources": ["modeldeployments"],
+                "verbs": ["create", "delete", "get", "patch"],
+            }
+        ]
+
+    def test_api_cannot_mutate_runtime_resources(self) -> None:
+        docs = load_yaml(API_CONFIG_DIR / "rbac.yaml")
+        role = next(d for d in docs if d.get("kind") == "ClusterRole")
+
+        resources = {resource for rule in role["rules"] for resource in rule.get("resources", [])}
+        assert resources.isdisjoint({"deployments", "replicasets", "services", "pods"})
 
     def test_cluster_role_binding_created(self) -> None:
         """ClusterRoleBinding should bind role to service account."""
@@ -144,6 +152,64 @@ class TestApiRbac:
         
         assert binding["roleRef"]["name"] == "kernexys-api"
         assert binding["subjects"][0]["name"] == "kernexys-api"
+
+    def test_deployment_uses_bound_service_account(self) -> None:
+        deployment_docs = load_yaml(API_CONFIG_DIR / "deployment.yaml")
+        deployment = next(d for d in deployment_docs if d.get("kind") == "Deployment")
+        rbac_docs = load_yaml(API_CONFIG_DIR / "rbac.yaml")
+        binding = next(d for d in rbac_docs if d.get("kind") == "ClusterRoleBinding")
+
+        assert deployment["spec"]["template"]["spec"]["serviceAccountName"] == "kernexys-api"
+        assert binding["subjects"] == [
+            {
+                "kind": "ServiceAccount",
+                "name": "kernexys-api",
+                "namespace": "kernexys-system",
+            }
+        ]
+
+
+def test_helm_renders_canonical_api_identity_and_rbac() -> None:
+    import yaml
+
+    helm = shutil.which("helm")
+    if helm is None:
+        pytest.skip("Helm is not installed")
+    rendered = subprocess.run(
+        [helm, "template", "kernexys", str(HELM_CHART), "--set", "worker.enabled=false"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    docs = [document for document in yaml.safe_load_all(rendered) if document]
+    api_role = next(
+        document
+        for document in docs
+        if document.get("kind") == "ClusterRole"
+        and document.get("metadata", {}).get("name") == "kernexys-api"
+    )
+    api_binding = next(
+        document
+        for document in docs
+        if document.get("kind") == "ClusterRoleBinding"
+        and document.get("metadata", {}).get("name") == "kernexys-api"
+    )
+    api_deployment = next(
+        document
+        for document in docs
+        if document.get("kind") == "Deployment"
+        and document.get("metadata", {}).get("name") == "kernexys-api"
+    )
+
+    assert api_role["rules"] == [
+        {
+            "apiGroups": ["platform.kernexys.io"],
+            "resources": ["modeldeployments"],
+            "verbs": ["create", "delete", "get", "patch"],
+        }
+    ]
+    assert api_binding["subjects"][0]["name"] == "kernexys-api"
+    assert api_deployment["spec"]["template"]["spec"]["serviceAccountName"] == "kernexys-api"
 
 
 class TestApiNetworkPolicy:

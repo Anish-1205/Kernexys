@@ -5,5 +5,3 @@ resources:
   - binding.yaml
   - leader_election_role.yaml
   - leader_election_binding.yaml
-  - control_api_role.yaml
-  - control_api_binding.yaml

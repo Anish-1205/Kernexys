@@ -56,11 +56,9 @@ applies similar security hardening:
 
 ### API Permissions
 
-The API ServiceAccount (`kernexys-api`) has ClusterRole permissions to:
-
-- Read/write ModelDeployment resources and status
-- Read Kubernetes Deployments and Services for status monitoring
-- Read Endpoints for service discovery
+The API ServiceAccount (`kernexys-api`) has ClusterRole permissions to create,
+get, patch, and delete ModelDeployment resources in any namespace. It cannot mutate
+controller-owned workloads or write the ModelDeployment status subresource.
 
 Permissions are minimal and follow principle of least privilege.
 

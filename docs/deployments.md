@@ -18,7 +18,7 @@ export KERNEXYS_KUBECONFIG="$HOME/.kube/config"
 ```
 
 An in-cluster deployment uses `KERNEXYS_KUBERNETES_CONFIG_MODE=in-cluster` and
-the `kernexys-control-api` service account. Checked-in RBAC permits only get,
+the `kernexys-api` service account. Checked-in RBAC permits only create, get,
 patch, and delete on ModelDeployments. The API has no permission to create or
 change Deployments, Services, Rollouts, autoscalers, or CR status.
 
