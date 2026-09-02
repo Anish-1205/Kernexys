@@ -132,7 +132,7 @@ func (r *ModelDeploymentReconciler) updateInvalidStatus(
 	modelDeployment *platformv1alpha1.ModelDeployment,
 	validationError error,
 ) error {
-	desired := modelDeployment.Status
+	desired := *modelDeployment.Status.DeepCopy()
 	desired.ObservedGeneration = modelDeployment.Generation
 	desired.DesiredReplicas = desiredReplicaCount(modelDeployment)
 	setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionAvailable, metav1.ConditionFalse, "InvalidSpec", "Desired state is invalid.")
@@ -147,7 +147,9 @@ func (r *ModelDeploymentReconciler) reconcileError(
 	reason string,
 	reconcileError error,
 ) error {
-	desired := modelDeployment.Status
+	desired := *modelDeployment.Status.DeepCopy()
+	desired.ObservedGeneration = modelDeployment.Generation
+	desired.DesiredReplicas = desiredReplicaCount(modelDeployment)
 	setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionAvailable, metav1.ConditionFalse, reason, "The desired workload could not be reconciled.")
 	setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionProgressing, metav1.ConditionFalse, reason, "controller-runtime will retry the transient failure.")
 	setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionDegraded, metav1.ConditionTrue, reason, reconcileError.Error())
@@ -168,23 +170,45 @@ func (r *ModelDeploymentReconciler) updateObservedStatus(
 		deployment.Status.AvailableReplicas == desiredReplicas &&
 		ready == desiredReplicas
 
-	desired := modelDeployment.Status
+	desired := *modelDeployment.Status.DeepCopy()
 	desired.ObservedGeneration = modelDeployment.Generation
 	desired.DesiredReplicas = desiredReplicas
 	desired.ReadyReplicas = ready
 	desired.Endpoint = fmt.Sprintf("http://%s.%s.svc.cluster.local", service.Name, service.Namespace)
+	rolloutFailure := terminalDeploymentFailure(deployment)
 	if available {
 		desired.ActiveModel = modelDeployment.Spec.Model.Name
 		desired.ActiveVersion = modelDeployment.Spec.Model.Version
 		setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionAvailable, metav1.ConditionTrue, "MinimumReplicasAvailable", "All desired runtime replicas are available.")
-		setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionProgressing, metav1.ConditionFalse, "RolloutComplete", "The runtime rollout is complete.")
 	} else {
 		message := fmt.Sprintf("Waiting for ready replicas: %d/%d.", ready, desiredReplicas)
 		setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionAvailable, metav1.ConditionFalse, "ReplicasNotReady", message)
-		setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionProgressing, metav1.ConditionTrue, "Reconciling", message)
 	}
-	setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionDegraded, metav1.ConditionFalse, "ReconcileSucceeded", "The desired child resources were reconciled.")
+	if rolloutFailure != nil {
+		setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionProgressing, metav1.ConditionFalse, rolloutFailure.Reason, rolloutFailure.Message)
+		setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionDegraded, metav1.ConditionTrue, rolloutFailure.Reason, rolloutFailure.Message)
+	} else if available {
+		setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionProgressing, metav1.ConditionFalse, "RolloutComplete", "The runtime rollout is complete.")
+		setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionDegraded, metav1.ConditionFalse, "ReconcileSucceeded", "The desired child resources were reconciled.")
+	} else {
+		message := fmt.Sprintf("Waiting for ready replicas: %d/%d.", ready, desiredReplicas)
+		setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionProgressing, metav1.ConditionTrue, "Reconciling", message)
+		setCondition(&desired, modelDeployment.Generation, platformv1alpha1.ConditionDegraded, metav1.ConditionFalse, "ReconcileSucceeded", "The desired child resources were reconciled.")
+	}
 	return r.updateStatusIfChanged(ctx, modelDeployment, desired)
+}
+
+func terminalDeploymentFailure(deployment *appsv1.Deployment) *appsv1.DeploymentCondition {
+	if deployment.Status.ObservedGeneration != deployment.Generation {
+		return nil
+	}
+	for index := range deployment.Status.Conditions {
+		condition := &deployment.Status.Conditions[index]
+		if condition.Type == appsv1.DeploymentProgressing && condition.Status == corev1.ConditionFalse {
+			return condition
+		}
+	}
+	return nil
 }
 
 func (r *ModelDeploymentReconciler) updateStatusIfChanged(

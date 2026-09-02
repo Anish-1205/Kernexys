@@ -138,6 +138,30 @@ func TestReconciliationRepairsDeploymentDrift(t *testing.T) {
 	}
 }
 
+func TestReplicaDesiredStateUpdateChangesDeployment(t *testing.T) {
+	modelDeployment := validModelDeployment()
+	reconciler, counted := newTestReconciler(t, modelDeployment)
+	reconcileSuccessfully(t, reconciler, modelDeployment)
+
+	updated := getModelDeployment(t, counted, modelDeployment)
+	replicas := int32(2)
+	updated.Spec.Replicas = &replicas
+	updated.Generation++
+	if err := counted.Client.Update(context.Background(), updated); err != nil {
+		t.Fatalf("update ModelDeployment replicas: %v", err)
+	}
+	counted.resetCounts()
+
+	reconcileSuccessfully(t, reconciler, updated)
+	deployment := getDeployment(t, counted, updated)
+	if got := *deployment.Spec.Replicas; got != 2 {
+		t.Fatalf("Deployment replicas = %d, want 2", got)
+	}
+	if counted.updates != 1 {
+		t.Fatalf("child updates = %d, want exactly 1", counted.updates)
+	}
+}
+
 func TestReconciliationRecreatesMissingService(t *testing.T) {
 	modelDeployment := validModelDeployment()
 	reconciler, counted := newTestReconciler(t, modelDeployment)
@@ -200,6 +224,76 @@ func TestWorkloadReadinessUpdatesActiveVersionAndConditions(t *testing.T) {
 	assertCondition(t, observed, platformv1alpha1.ConditionProgressing, metav1.ConditionFalse, "RolloutComplete")
 }
 
+func TestUnavailableDeploymentStillProgressingIsNotDegraded(t *testing.T) {
+	modelDeployment := validModelDeployment()
+	reconciler, counted := newTestReconciler(t, modelDeployment)
+	reconcileSuccessfully(t, reconciler, modelDeployment)
+
+	deployment := getDeployment(t, counted, modelDeployment)
+	deployment.Status.ObservedGeneration = deployment.Generation
+	deployment.Status.Conditions = []appsv1.DeploymentCondition{{
+		Type:    appsv1.DeploymentProgressing,
+		Status:  corev1.ConditionTrue,
+		Reason:  "NewReplicaSetAvailable",
+		Message: "ReplicaSet is making progress.",
+	}}
+	if err := counted.Client.Status().Update(context.Background(), deployment); err != nil {
+		t.Fatalf("update progressing Deployment status: %v", err)
+	}
+
+	service := getService(t, counted, modelDeployment)
+	current := getModelDeployment(t, counted, modelDeployment)
+	if err := reconciler.updateObservedStatus(context.Background(), current, deployment, service); err != nil {
+		t.Fatalf("update ModelDeployment status: %v", err)
+	}
+	observed := getModelDeployment(t, counted, modelDeployment)
+	assertCondition(t, observed, platformv1alpha1.ConditionProgressing, metav1.ConditionTrue, "Reconciling")
+	assertCondition(t, observed, platformv1alpha1.ConditionDegraded, metav1.ConditionFalse, "ReconcileSucceeded")
+}
+
+func TestTerminalDeploymentFailureIsDegradedAtCurrentGeneration(t *testing.T) {
+	modelDeployment := validModelDeployment()
+	reconciler, counted := newTestReconciler(t, modelDeployment)
+	reconcileSuccessfully(t, reconciler, modelDeployment)
+
+	deployment := getDeployment(t, counted, modelDeployment)
+	deployment.Status.ObservedGeneration = deployment.Generation
+	deployment.Status.Replicas = 1
+	deployment.Status.Conditions = []appsv1.DeploymentCondition{{
+		Type:    appsv1.DeploymentProgressing,
+		Status:  corev1.ConditionFalse,
+		Reason:  "ProgressDeadlineExceeded",
+		Message: "ReplicaSet sentiment failed to progress within its deadline.",
+	}}
+	if err := counted.Client.Status().Update(context.Background(), deployment); err != nil {
+		t.Fatalf("update failed Deployment status: %v", err)
+	}
+	failedDeployment := getDeployment(t, counted, modelDeployment)
+	if failure := terminalDeploymentFailure(failedDeployment); failure == nil {
+		t.Fatalf("terminal Deployment condition was not persisted: %#v", failedDeployment.Status.Conditions)
+	}
+
+	service := getService(t, counted, modelDeployment)
+	current := getModelDeployment(t, counted, modelDeployment)
+	if err := reconciler.updateObservedStatus(context.Background(), current, failedDeployment, service); err != nil {
+		t.Fatalf("update ModelDeployment status: %v", err)
+	}
+	observed := getModelDeployment(t, counted, modelDeployment)
+	if observed.Status.ObservedGeneration != observed.Generation {
+		t.Fatalf("observed generation = %d, want %d", observed.Status.ObservedGeneration, observed.Generation)
+	}
+	if observed.Status.DesiredReplicas != 1 || observed.Status.ReadyReplicas != 0 {
+		t.Fatalf("replica status = %d/%d, want 0/1", observed.Status.ReadyReplicas, observed.Status.DesiredReplicas)
+	}
+	assertCondition(t, observed, platformv1alpha1.ConditionAvailable, metav1.ConditionFalse, "ReplicasNotReady")
+	assertCondition(t, observed, platformv1alpha1.ConditionProgressing, metav1.ConditionFalse, "ProgressDeadlineExceeded")
+	assertCondition(t, observed, platformv1alpha1.ConditionDegraded, metav1.ConditionTrue, "ProgressDeadlineExceeded")
+	degraded := meta.FindStatusCondition(observed.Status.Conditions, platformv1alpha1.ConditionDegraded)
+	if degraded.Message != "ReplicaSet sentiment failed to progress within its deadline." {
+		t.Fatalf("degraded message = %q, want Deployment failure context", degraded.Message)
+	}
+}
+
 func TestTransientChildFailureReturnsErrorAndSetsDegraded(t *testing.T) {
 	modelDeployment := validModelDeployment()
 	reconciler, counted := newTestReconciler(t, modelDeployment)
@@ -211,8 +305,8 @@ func TestTransientChildFailureReturnsErrorAndSetsDegraded(t *testing.T) {
 	}
 	observed := getModelDeployment(t, counted, modelDeployment)
 	assertCondition(t, observed, platformv1alpha1.ConditionDegraded, metav1.ConditionTrue, "DeploymentReconcileFailed")
-	if observed.Status.ObservedGeneration != 0 {
-		t.Fatalf("failed reconciliation advanced observed generation to %d", observed.Status.ObservedGeneration)
+	if observed.Status.ObservedGeneration != modelDeployment.Generation {
+		t.Fatalf("observed generation = %d, want evaluated generation %d", observed.Status.ObservedGeneration, modelDeployment.Generation)
 	}
 }
 
