@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: worker
-        image: kernexys:latest
+        image: kernexys/control-api:dev
         imagePullPolicy: IfNotPresent
         command:
         - kernexys-worker

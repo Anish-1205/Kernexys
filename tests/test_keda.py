@@ -76,6 +76,20 @@ class TestKedaDeploymentManifest:
         spec = deployment["spec"]["template"]["spec"]
         assert spec["terminationGracePeriodSeconds"] == 35
 
+    def test_deployment_image_is_pinned_control_plane_tag(self) -> None:
+        """Worker must run the versioned control-plane image, not a floating tag.
+
+        Regression guard: the kustomize base once carried ``kernexys:latest``,
+        which is not a published image and never matches what kind/Helm load.
+        """
+        docs = load_yaml(KEDA_CONFIG_DIR / "deployment.yaml")
+        deployment = docs[0]
+
+        image = deployment["spec"]["template"]["spec"]["containers"][0]["image"]
+        repository, _, tag = image.rpartition(":")
+        assert repository == "kernexys/control-api"
+        assert tag and tag != "latest"
+
     def test_deployment_uses_redis_secret(self) -> None:
         """Deployment should reference Redis credentials from secret."""
         docs = load_yaml(KEDA_CONFIG_DIR / "deployment.yaml")
