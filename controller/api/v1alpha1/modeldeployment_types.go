@@ -65,6 +65,7 @@ type ModelDeploymentSpec struct {
 }
 
 type ModelDeploymentStatus struct {
+	// ObservedGeneration is the latest ModelDeployment generation evaluated by the controller.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
 	DesiredReplicas int32 `json:"desiredReplicas,omitempty"`
@@ -94,7 +95,9 @@ type ModelDeployment struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ModelDeploymentSpec   `json:"spec,omitempty"`
+	// +kubebuilder:validation:Required
+	Spec ModelDeploymentSpec `json:"spec"`
+
 	Status ModelDeploymentStatus `json:"status,omitempty"`
 }
 

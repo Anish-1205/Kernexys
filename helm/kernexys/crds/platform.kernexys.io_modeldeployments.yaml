@@ -199,12 +199,16 @@ spec:
               endpoint:
                 type: string
               observedGeneration:
+                description: ObservedGeneration is the latest ModelDeployment generation
+                  evaluated by the controller.
                 format: int64
                 type: integer
               readyReplicas:
                 format: int32
                 type: integer
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true
