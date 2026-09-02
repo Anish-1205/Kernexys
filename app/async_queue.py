@@ -33,6 +33,51 @@ redis.call('RPUSH', queue, ARGV[4])
 return 1
 """
 
+# Sweep the processing list and requeue only genuinely stranded claims. The
+# whole sweep runs as one atomic Redis unit, so a worker's finish() (itself a
+# MULTI/EXEC) can never interleave between the terminal-status check and the
+# requeue: it lands entirely before this script (seen as terminal -> only
+# unlinked) or entirely after (the job is already back on the queue with
+# status "queued", and finish()'s own LREM/HSET then settle it -- claim()
+# rejects the terminal record on the next pop).
+#
+# A processing entry with no claimed_at was popped by BLMOVE but not yet
+# stamped by claim() -- either a live worker microseconds from stamping, or a
+# worker that died mid-claim. The two are indistinguishable by state, so the
+# entry is stamped now and only its persistence across a later sweep (a full
+# lease later) proves it stranded. Requeued jobs have claimed_at cleared so a
+# re-claim that dies mid-flight falls back into the same grace path.
+#
+# KEYS[1] processing list  KEYS[2] queue list
+# ARGV[1] job key prefix   ARGV[2] stranded-before epoch   ARGV[3] now epoch
+_RECOVER_PROCESSING_SCRIPT = """
+local recovered = 0
+local ids = redis.call('LRANGE', KEYS[1], 0, -1)
+for i = 1, #ids do
+  local job_id = ids[i]
+  local key = ARGV[1] .. job_id
+  local status = redis.call('HGET', key, 'status')
+  if status == false or status == 'succeeded' or status == 'failed' then
+    redis.call('LREM', KEYS[1], 1, job_id)
+  else
+    local claimed_at = redis.call('HGET', key, 'claimed_at')
+    if claimed_at == false then
+      redis.call('HSET', key, 'claimed_at', ARGV[3])
+    else
+      local ts = tonumber(claimed_at)
+      if ts == nil then ts = 0 end
+      if ts <= tonumber(ARGV[2]) and redis.call('LREM', KEYS[1], 1, job_id) == 1 then
+        redis.call('HSET', key, 'status', 'queued')
+        redis.call('HDEL', key, 'claimed_at')
+        redis.call('RPUSH', KEYS[2], job_id)
+        recovered = recovered + 1
+      end
+    end
+  end
+end
+return recovered
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class EnqueueResult:
@@ -160,41 +205,33 @@ class RedisInferenceQueue:
         the lease exceeds), so a younger entry belongs to work still in flight
         and is left untouched. Entries whose job record already reached a
         terminal status, or expired entirely, are only unlinked from the
-        processing list -- never resurrected. This keeps delivery at least once
-        without re-running or rewinding jobs a worker is actively handling.
+        processing list -- never resurrected. An entry still missing its
+        ``claimed_at`` stamp is one grace interval old at most and is left for
+        the next sweep. The scan runs as a single atomic Redis script so a
+        concurrent ``finish`` cannot interleave with the requeue decision.
+
+        Delivery stays at least once: a job whose worker died is requeued once
+        the lease lapses; nothing here makes a claim exactly once.
         """
-        recovered = 0
         try:
             acquired = await self._redis.set(
                 RECOVERY_LOCK_KEY, "1", nx=True, ex=self._recovery_lock_seconds
             )
             if not acquired:
                 return 0
-            stranded_before = time.time() - self._recovery_lock_seconds
-            for job_id in await self._redis.lrange(PROCESSING_KEY, 0, -1):
-                job = await self._redis.hgetall(JOB_PREFIX + job_id)
-                if not job or job.get("status") in {"succeeded", "failed"}:
-                    await self._redis.lrem(PROCESSING_KEY, 1, job_id)
-                    continue
-                try:
-                    claimed_at = float(job.get("claimed_at", ""))
-                except ValueError:
-                    claimed_at = 0.0
-                if claimed_at > stranded_before:
-                    continue
-                if not await self._redis.lrem(PROCESSING_KEY, 1, job_id):
-                    continue
-                if await self._redis.hget(JOB_PREFIX + job_id, "status") in {
-                    "succeeded",
-                    "failed",
-                }:
-                    continue
-                await self._redis.hset(JOB_PREFIX + job_id, mapping={"status": "queued"})
-                await self._redis.rpush(QUEUE_KEY, job_id)
-                recovered += 1
+            now = time.time()
+            recovered = await self._redis.eval(
+                _RECOVER_PROCESSING_SCRIPT,
+                2,
+                PROCESSING_KEY,
+                QUEUE_KEY,
+                JOB_PREFIX,
+                repr(now - self._recovery_lock_seconds),
+                repr(now),
+            )
         except RedisError as exc:
             raise AsyncQueueError("Redis is unavailable") from exc
-        return recovered
+        return int(recovered)
 
     async def close(self) -> None:
         await self._redis.aclose()

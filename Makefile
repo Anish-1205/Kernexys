@@ -1,4 +1,4 @@
-.PHONY: install format lint test migrate run container-build container-up container-down container-clean controller-generate controller-format controller-vet controller-test controller-integration api-kubernetes-integration runtime-install runtime-format runtime-lint runtime-test kind-create kind-delete kind-build kind-load kind-install kind-validate
+.PHONY: install format lint test migrate run container-build container-up container-down container-clean controller-generate controller-format controller-vet controller-test controller-integration api-kubernetes-integration redis-integration runtime-install runtime-format runtime-lint runtime-test kind-create kind-delete kind-build kind-load kind-install kind-validate
 
 PYTHON ?= .venv/bin/python
 RUFF ?= .venv/bin/ruff
@@ -29,6 +29,10 @@ lint:
 
 test:
 	$(PYTHON) -m pytest --basetemp=.test-tmp/api --cov=app --cov-report=term-missing
+
+redis-integration:
+	docker run -d --rm --name kernexys-test-redis -p 6379:6379 redis:7-alpine --save '' --appendonly no
+	KERNEXYS_TEST_REDIS_URL=redis://localhost:6379/15 $(PYTHON) -m pytest tests/integration/test_async_queue_redis.py --basetemp=.test-tmp/redis -v; status=$$?; docker rm -f kernexys-test-redis; exit $$status
 
 migrate:
 	$(ALEMBIC) upgrade head
