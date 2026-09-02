@@ -56,9 +56,9 @@ spec:
         livenessProbe:
           exec:
             command:
-            - /bin/sh
+            - python
             - -c
-            - ps aux | grep kernexys-worker | grep -v grep
+            - 'from pathlib import Path; raise SystemExit(b"kernexys-worker" not in Path("/proc/1/cmdline").read_bytes())'
           initialDelaySeconds: 10
           periodSeconds: 30
           timeoutSeconds: 5
