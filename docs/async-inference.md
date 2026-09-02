@@ -15,10 +15,13 @@ default). Failure messages are intentionally sanitized.
 
 Workers use an atomic queued-to-processing move. Normal termination finishes the
 current request before exiting. A process crash can leave an ID in the processing
-list; worker startup requeues such IDs under a Redis recovery lease longer than
-the runtime deadline, so scale-out does not reclaim active jobs. A rapid restart
-may wait for that lease to expire. Delivery is therefore at least once, not
-exactly once. Runtime calls have a finite timeout and worker concurrency is bounded.
+list; workers requeue such IDs under a Redis recovery lease longer than the
+runtime deadline, so scale-out does not reclaim active jobs. Recovery runs at
+startup and then re-runs once per lease interval, so a restart that races a
+still-held lease reclaims the job once the lease lapses instead of stranding it;
+the lease still admits only one worker per interval. Delivery is therefore at
+least once, not exactly once. Runtime calls have a finite timeout and worker
+concurrency is bounded.
 
 Unit tests cover bounded enqueue results, idempotency conflicts, processing-list
 recovery, deployment readiness, polling, and worker success/failure. A real Redis

@@ -53,13 +53,44 @@ async def consume(
                 pass
 
 
+async def recover_periodically(
+    queue: RedisInferenceQueue,
+    stop: asyncio.Event,
+    interval_seconds: float,
+) -> None:
+    """Re-run processing-list recovery once per recovery-lease interval.
+
+    Startup-only recovery strands a crashed worker's in-flight job whenever the
+    recovery lease is still held by a worker that has since departed: the
+    restarted worker's single attempt returns 0 and it never looks again. Re-
+    running the sweep lets some worker reclaim such jobs once the lease lapses.
+    ``recover_processing`` still gates each sweep on a Redis ``SET NX EX`` lease,
+    so at most one worker sweeps the processing list per interval.
+    """
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
+        except TimeoutError:
+            pass
+        else:
+            return
+        try:
+            recovered = await queue.recover_processing()
+        except AsyncQueueError:
+            logger.exception("recovery_sweep_failed")
+            continue
+        if recovered:
+            logger.info("async_jobs_recovered", extra={"recovered_jobs": recovered})
+
+
 async def run_worker(settings: Settings, stop: asyncio.Event) -> None:
+    recovery_lease_seconds = max(settings.async_inference_timeout_seconds * 2, 30)
     queue = RedisInferenceQueue.create(
         settings.redis_url,
         settings.async_queue_capacity,
         settings.async_job_ttl_seconds,
         settings.redis_socket_timeout_seconds,
-        max(settings.async_inference_timeout_seconds * 2, 30),
+        recovery_lease_seconds,
     )
     timeout = aiohttp.ClientTimeout(total=settings.async_inference_timeout_seconds)
     try:
@@ -67,6 +98,7 @@ async def run_worker(settings: Settings, stop: asyncio.Event) -> None:
         logger.info("worker_started", extra={"recovered_jobs": recovered})
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with asyncio.TaskGroup() as tasks:
+                tasks.create_task(recover_periodically(queue, stop, recovery_lease_seconds))
                 for _ in range(settings.async_worker_concurrency):
                     tasks.create_task(consume(queue, session, stop))
     finally:
