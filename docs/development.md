@@ -115,5 +115,5 @@ Python control API and verifies a real server-side apply/create, idempotent repe
 without a resourceVersion change, read, and delete. This ran successfully on the
 current host. It is an API-server integration test, not kind or workload E2E.
 
-The kind workflow and its unverified host requirements are documented in
+The validated kind workflow and its local PostgreSQL bootstrap are documented in
 [Local kind environment](kind.md).
