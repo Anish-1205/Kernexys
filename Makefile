@@ -97,7 +97,17 @@ kind-load:
 	$(KIND) load docker-image --name $(KIND_CLUSTER_NAME) $(CONTROL_API_IMAGE) $(CONTROLLER_IMAGE) $(MODEL_RUNTIME_V1_IMAGE) $(MODEL_RUNTIME_V2_IMAGE)
 
 kind-install:
+	@test -n "$(KERNEXYS_POSTGRES_PASSWORD)" || (echo "KERNEXYS_POSTGRES_PASSWORD is required" >&2; exit 1)
+	$(KUBECTL) apply --filename controller/config/api/namespace.yaml
+	$(KUBECTL) create secret generic kernexys-db --namespace kernexys-system --from-literal=url='postgresql+asyncpg://kernexys:$(KERNEXYS_POSTGRES_PASSWORD)@postgres.kernexys-system:5432/kernexys' --from-literal=password='$(KERNEXYS_POSTGRES_PASSWORD)' --dry-run=client --output=yaml | $(KUBECTL) apply --filename -
+	$(KUBECTL) apply --kustomize deploy/kind/dependencies
+	$(KUBECTL) rollout status statefulset/postgres --namespace kernexys-system --timeout=120s
+	$(KUBECTL) delete job kernexys-migrate --namespace kernexys-system --ignore-not-found
+	$(KUBECTL) apply --filename deploy/kind/migrate.yaml
+	$(KUBECTL) wait --namespace kernexys-system --for=condition=complete job/kernexys-migrate --timeout=120s
 	$(KUBECTL) apply --kustomize controller/config/default
 
 kind-validate:
+	$(KUBECTL) rollout status statefulset/postgres --namespace kernexys-system --timeout=120s
+	$(KUBECTL) wait --namespace kernexys-system --for=condition=Available deployment/kernexys-api --timeout=120s
 	$(KUBECTL) wait --namespace kernexys-system --for=condition=Available deployment/kernexys-controller --timeout=120s
