@@ -15,7 +15,7 @@ spec:
   - from:
     - namespaceSelector:
         matchLabels:
-          name: ingress-nginx
+          kubernetes.io/metadata.name: ingress-nginx
     ports:
     - protocol: TCP
       port: 8000
@@ -23,7 +23,7 @@ spec:
   - from:
     - namespaceSelector:
         matchLabels:
-          name: monitoring
+          kubernetes.io/metadata.name: monitoring
     ports:
     - protocol: TCP
       port: 8001
@@ -39,10 +39,7 @@ spec:
       port: 53
   # Allow to PostgreSQL
   - to:
-    - namespaceSelector:
-        matchLabels:
-          name: kernexys-system
-      podSelector:
+    - podSelector:
         matchLabels:
           app: postgres
     ports:
@@ -50,10 +47,7 @@ spec:
       port: 5432
   # Allow to Redis
   - to:
-    - namespaceSelector:
-        matchLabels:
-          name: kernexys-system
-      podSelector:
+    - podSelector:
         matchLabels:
           app: redis
     ports:
@@ -72,7 +66,7 @@ spec:
   - to:
     - namespaceSelector:
         matchLabels:
-          name: kernexys-workers
+          kubernetes.io/metadata.name: kernexys-workers
       podSelector:
         matchLabels:
           app: kernexys-worker

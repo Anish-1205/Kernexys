@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
@@ -28,6 +29,7 @@ registry_router = APIRouter(prefix="/v1", tags=["model registry"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 PageLimit = Annotated[int, Query(ge=1, le=100)]
 PageOffset = Annotated[int, Query(ge=0)]
+logger = logging.getLogger("kernexys.readiness")
 
 
 @health_router.get("/health/live", summary="Process liveness")
@@ -37,22 +39,32 @@ async def live() -> dict[str, str]:
 
 @health_router.get("/health/ready", summary="Dependency readiness")
 async def ready(request: Request, session: Session) -> dict[str, str]:
+    dependency = "database"
     try:
         async with asyncio.timeout(request.app.state.settings.readiness_timeout_seconds):
             await session.execute(text("SELECT 1"))
             if request.app.state.settings.kubernetes_enabled:
+                dependency = "kubernetes"
                 gateway = request.app.state.deployment_gateway
                 if gateway is None:
                     raise RuntimeError("Kubernetes gateway is not initialized")
                 await gateway.check_ready()
             if request.app.state.settings.async_inference_enabled:
+                dependency = "redis"
                 queue = request.app.state.async_queue
                 if queue is None:
                     raise RuntimeError("Async queue is not initialized")
                 await queue.check_ready()
     except Exception as exc:
+        logger.warning(
+            "readiness_dependency_unavailable",
+            extra={"dependency": dependency, "error_type": type(exc).__name__},
+        )
         raise ApiError(
-            503, "not_ready", "A required control-plane dependency is unavailable."
+            503,
+            "not_ready",
+            "A required control-plane dependency is unavailable.",
+            {"dependency": dependency},
         ) from exc
     return {"status": "ready"}
 

@@ -238,7 +238,7 @@ class TestKedaStaticValidation:
 
         chart = Path(__file__).parent.parent / "helm" / "kernexys"
         result = subprocess.run(
-            [helm, "template", "kernexys", str(chart)],
+            [helm, "template", "kernexys", str(chart), "--set", "worker.enabled=true"],
             capture_output=True,
             text=True,
             timeout=20,

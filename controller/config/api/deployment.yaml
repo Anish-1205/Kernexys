@@ -47,7 +47,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: api
-        image: kernexys:latest
+        image: kernexys/control-api:dev
         imagePullPolicy: IfNotPresent
         command:
         - uvicorn
@@ -66,12 +66,7 @@ spec:
         - name: KERNEXYS_KUBERNETES_CONFIG_MODE
           value: "in-cluster"
         - name: KERNEXYS_ASYNC_INFERENCE_ENABLED
-          value: "true"
-        - name: KERNEXYS_REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: kernexys-redis
-              key: url
+          value: "false"
         - name: KERNEXYS_LOG_LEVEL
           value: "INFO"
         - name: KERNEXYS_SERVER_LIMIT_CONCURRENCY

@@ -20,6 +20,7 @@ namespace:
   podSecurityStandards:
     enforce: restricted
     audit: restricted
+    warn: restricted
 
 # Control API (FastAPI model registry + deployment API).
 api:
@@ -57,7 +58,7 @@ api:
     MAX_REQUEST_BYTES: "1048576"
     KUBERNETES_ENABLED: "true"
     KUBERNETES_CONFIG_MODE: "in-cluster"
-    ASYNC_INFERENCE_ENABLED: "true"
+    ASYNC_INFERENCE_ENABLED: "false"
 
   # References to pre-existing Secrets (create these out-of-band; see docs/security.md).
   secrets:
@@ -73,7 +74,7 @@ api:
 
 # Async inference worker (Redis queue consumer, KEDA-scaled).
 worker:
-  enabled: true
+  enabled: false
   replicaCount: 1 # KEDA manages replica count when keda.enabled is true.
 
   image:

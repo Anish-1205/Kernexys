@@ -106,8 +106,11 @@ class FakeInferenceQueue:
         self.jobs: dict[str, dict[str, str]] = {}
         self.full = False
         self.closed = False
+        self.ready_error: Exception | None = None
 
     async def check_ready(self) -> None:
+        if self.ready_error is not None:
+            raise self.ready_error
         return None
 
     async def enqueue(self, job_id: str, payload: dict[str, Any]) -> EnqueueResult:

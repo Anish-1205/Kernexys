@@ -66,11 +66,13 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.api.secrets.database.name }}
                   key: {{ .Values.api.secrets.database.key }}
+            {{- if eq (toString (index .Values.api.env "ASYNC_INFERENCE_ENABLED")) "true" }}
             - name: KERNEXYS_REDIS_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.api.secrets.redis.name }}
                   key: {{ .Values.api.secrets.redis.key }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8000

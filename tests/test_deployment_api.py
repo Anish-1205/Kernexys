@@ -190,6 +190,7 @@ def test_readiness_tracks_kubernetes_when_enabled(
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "not_ready"
+    assert response.json()["error"]["details"] == {"dependency": "kubernetes"}
 
 
 def test_deployment_api_is_explicitly_disabled_without_kubernetes(client: TestClient) -> None:

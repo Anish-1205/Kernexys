@@ -7,18 +7,21 @@ Before workloads become ready, create the referenced Secrets (see docs/security.
     --from-literal={{ .Values.api.secrets.database.key }}='postgresql+asyncpg://user:pass@host:5432/db' \
     -n {{ .Values.namespace.system }}
 
+{{- if eq (toString (index .Values.api.env "ASYNC_INFERENCE_ENABLED")) "true" }}
+
   kubectl create secret generic {{ .Values.api.secrets.redis.name }} \
     --from-literal={{ .Values.api.secrets.redis.key }}='redis://:password@host:6379/0' \
     --from-literal=password='password' \
     -n {{ .Values.namespace.system }}
-{{- if and .Values.worker.enabled .Values.worker.keda.enabled }}
+{{- end }}
+{{- if .Values.worker.enabled }}
 
   kubectl create secret generic {{ .Values.worker.secrets.redis.name }} \
     --from-literal={{ .Values.worker.secrets.redis.key }}='redis://:password@host:6379/0' \
     --from-literal=password='password' \
     -n {{ .Values.namespace.workers }}
 {{- end }}
-{{- if .Values.worker.keda.enabled }}
+{{- if and .Values.worker.enabled .Values.worker.keda.enabled }}
 
 KEDA must already be installed in the cluster for the async worker to autoscale
 (spec.triggers[0].type: redis in the ScaledObject).
