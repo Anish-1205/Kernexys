@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -122,7 +123,10 @@ class RedisInferenceQueue:
             if not job or job.get("status") in {"succeeded", "failed"}:
                 await self._redis.lrem(PROCESSING_KEY, 1, job_id)
                 return None
-            await self._redis.hset(JOB_PREFIX + job_id, mapping={"status": "running"})
+            await self._redis.hset(
+                JOB_PREFIX + job_id,
+                mapping={"status": "running", "claimed_at": repr(time.time())},
+            )
             return ClaimedJob(job_id=job_id, payload=json.loads(job["payload"]))
         except (RedisError, KeyError, json.JSONDecodeError) as exc:
             raise AsyncQueueError("Redis queue state is unavailable or invalid") from exc
@@ -149,6 +153,16 @@ class RedisInferenceQueue:
             raise AsyncQueueError("Redis is unavailable") from exc
 
     async def recover_processing(self) -> int:
+        """Requeue jobs stranded in the processing list by a departed worker.
+
+        The sweep only reclaims an ID whose claim is older than the recovery
+        lease: a live worker finishes a claim within the runtime deadline (which
+        the lease exceeds), so a younger entry belongs to work still in flight
+        and is left untouched. Entries whose job record already reached a
+        terminal status, or expired entirely, are only unlinked from the
+        processing list -- never resurrected. This keeps delivery at least once
+        without re-running or rewinding jobs a worker is actively handling.
+        """
         recovered = 0
         try:
             acquired = await self._redis.set(
@@ -156,12 +170,28 @@ class RedisInferenceQueue:
             )
             if not acquired:
                 return 0
-            while job_id := await self._redis.lmove(PROCESSING_KEY, QUEUE_KEY, "LEFT", "LEFT"):
-                if await self._redis.exists(JOB_PREFIX + job_id):
-                    await self._redis.hset(JOB_PREFIX + job_id, mapping={"status": "queued"})
-                    recovered += 1
-                else:
-                    await self._redis.lrem(QUEUE_KEY, 1, job_id)
+            stranded_before = time.time() - self._recovery_lock_seconds
+            for job_id in await self._redis.lrange(PROCESSING_KEY, 0, -1):
+                job = await self._redis.hgetall(JOB_PREFIX + job_id)
+                if not job or job.get("status") in {"succeeded", "failed"}:
+                    await self._redis.lrem(PROCESSING_KEY, 1, job_id)
+                    continue
+                try:
+                    claimed_at = float(job.get("claimed_at", ""))
+                except ValueError:
+                    claimed_at = 0.0
+                if claimed_at > stranded_before:
+                    continue
+                if not await self._redis.lrem(PROCESSING_KEY, 1, job_id):
+                    continue
+                if await self._redis.hget(JOB_PREFIX + job_id, "status") in {
+                    "succeeded",
+                    "failed",
+                }:
+                    continue
+                await self._redis.hset(JOB_PREFIX + job_id, mapping={"status": "queued"})
+                await self._redis.rpush(QUEUE_KEY, job_id)
+                recovered += 1
         except RedisError as exc:
             raise AsyncQueueError("Redis is unavailable") from exc
         return recovered

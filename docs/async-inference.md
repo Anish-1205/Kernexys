@@ -13,15 +13,19 @@ returns `429`.
 or `failed`. Results expire after `KERNEXYS_ASYNC_JOB_TTL_SECONDS` (one hour by
 default). Failure messages are intentionally sanitized.
 
-Workers use an atomic queued-to-processing move. Normal termination finishes the
-current request before exiting. A process crash can leave an ID in the processing
-list; workers requeue such IDs under a Redis recovery lease longer than the
-runtime deadline, so scale-out does not reclaim active jobs. Recovery runs at
-startup and then re-runs once per lease interval, so a restart that races a
-still-held lease reclaims the job once the lease lapses instead of stranding it;
-the lease still admits only one worker per interval. Delivery is therefore at
-least once, not exactly once. Runtime calls have a finite timeout and worker
-concurrency is bounded.
+Workers use an atomic queued-to-processing move and stamp each claim with the
+time it was taken. Normal termination finishes the current request before
+exiting. A process crash can leave an ID in the processing list; the recovery
+sweep requeues only IDs whose claim is older than the recovery lease -- which
+exceeds the runtime deadline -- so a job a live worker is still handling (or has
+just finished) is never re-run or rewound to `queued`. Entries whose job record
+already reached `succeeded`/`failed`, or expired, are unlinked from the
+processing list rather than resurrected. Recovery runs at startup and then
+re-runs once per lease interval, so a restart that races a still-held lease
+reclaims the job once the lease lapses instead of stranding it; the lease still
+admits only one worker per interval. Delivery is therefore at least once, not
+exactly once. Runtime calls have a finite timeout and worker concurrency is
+bounded.
 
 Unit tests cover bounded enqueue results, idempotency conflicts, processing-list
 recovery, deployment readiness, polling, and worker success/failure. A real Redis

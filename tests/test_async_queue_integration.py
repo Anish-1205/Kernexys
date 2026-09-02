@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from redis.exceptions import ConnectionError, TimeoutError as RedisTimeoutError
+from redis.exceptions import ConnectionError
 
 from app.async_queue import AsyncQueueError, EnqueueResult, RedisInferenceQueue
 
@@ -196,11 +196,15 @@ async def test_recover_processing_handles_redis_unavailability_on_set() -> None:
         await queue.recover_processing()
 
 
+def _stranded(status: str = "running") -> dict[str, str]:
+    return {"status": status, "claimed_at": "0.0", "payload": "{}"}
+
+
 @pytest.mark.anyio
 async def test_recover_processing_handles_redis_unavailability_during_recovery() -> None:
     redis = AsyncMock()
     redis.set.return_value = True
-    redis.lmove.side_effect = ConnectionError("connection refused")
+    redis.lrange.side_effect = ConnectionError("connection refused")
     queue = RedisInferenceQueue(redis, capacity=10, job_ttl_seconds=60)
 
     with pytest.raises(AsyncQueueError, match="Redis is unavailable"):
@@ -211,27 +215,32 @@ async def test_recover_processing_handles_redis_unavailability_during_recovery()
 async def test_recover_processing_with_multiple_pending_jobs() -> None:
     redis = AsyncMock()
     redis.set.return_value = True
-    redis.lmove.side_effect = ["job-1", "job-2", None]
-    redis.exists.side_effect = [1, 1]
+    redis.lrange.return_value = ["job-1", "job-2"]
+    redis.hgetall.side_effect = [_stranded(), _stranded()]
+    redis.lrem.return_value = 1
+    redis.hget.return_value = "queued"
     queue = RedisInferenceQueue(redis, capacity=10, job_ttl_seconds=60)
 
     recovered = await queue.recover_processing()
 
     assert recovered == 2
+    assert redis.rpush.await_count == 2
 
 
 @pytest.mark.anyio
 async def test_recover_processing_handles_partial_job_loss() -> None:
     redis = AsyncMock()
     redis.set.return_value = True
-    redis.lmove.side_effect = ["job-1", "job-2", "job-3", None]
-    redis.exists.side_effect = [1, 0, 1]
+    redis.lrange.return_value = ["job-1", "job-2", "job-3"]
+    redis.hgetall.side_effect = [_stranded(), {}, _stranded()]
+    redis.lrem.return_value = 1
+    redis.hget.return_value = "queued"
     queue = RedisInferenceQueue(redis, capacity=10, job_ttl_seconds=60)
 
     recovered = await queue.recover_processing()
 
     assert recovered == 2
-    redis.lrem.assert_awaited_once()
+    assert redis.rpush.await_count == 2
 
 
 @pytest.mark.anyio
@@ -282,10 +291,8 @@ async def test_enqueue_result_conflict_flag() -> None:
 async def test_recovery_lease_duration_configuration() -> None:
     redis = AsyncMock()
     redis.set.return_value = True
-    redis.lmove.return_value = None
-    queue = RedisInferenceQueue(
-        redis, capacity=10, job_ttl_seconds=60, recovery_lock_seconds=120
-    )
+    redis.lrange.return_value = []
+    queue = RedisInferenceQueue(redis, capacity=10, job_ttl_seconds=60, recovery_lock_seconds=120)
 
     await queue.recover_processing()
 
