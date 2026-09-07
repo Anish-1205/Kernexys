@@ -6,5 +6,9 @@ resources:
   - rbac.yaml
   - deployment.yaml
   - keda.yaml
-commonLabels:
-  component: inference-workers
+# See controller/config/api/kustomization.yaml: `commonLabels` rewrites
+# NetworkPolicy peer selectors, so use `labels` with selectors excluded.
+labels:
+  - pairs:
+      component: inference-workers
+    includeSelectors: false

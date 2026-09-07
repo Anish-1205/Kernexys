@@ -6,5 +6,11 @@ resources:
   - rbac.yaml
   - deployment.yaml
   - networkpolicy.yaml
-commonLabels:
-  component: control-api
+# Use `labels` (not the deprecated `commonLabels`) so the marker label is added
+# to resource metadata only. `commonLabels` also rewrites NetworkPolicy
+# ingress/egress peer selectors, which silently made every egress rule here
+# (Postgres, DNS, kube-apiserver) match nothing and broke API readiness.
+labels:
+  - pairs:
+      component: control-api
+    includeSelectors: false
