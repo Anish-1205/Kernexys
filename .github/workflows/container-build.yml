@@ -11,11 +11,6 @@ on:
       - 'controller/Dockerfile'
       - 'runtime/Dockerfile'
       - '.github/workflows/container-build.yml'
-  workflow_run:
-    workflows: ["Python API CI", "Go Controller CI"]
-    types: [completed]
-    branches: [main]
-
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -144,6 +139,9 @@ jobs:
   scan-vulnerabilities:
     name: Scan Container Images
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
     - uses: actions/checkout@v7
     

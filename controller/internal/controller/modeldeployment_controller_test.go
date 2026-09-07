@@ -168,7 +168,7 @@ func TestReconciliationRecreatesMissingService(t *testing.T) {
 	reconcileSuccessfully(t, reconciler, modelDeployment)
 
 	service := getService(t, counted, modelDeployment)
-	if err := counted.Client.Delete(context.Background(), service); err != nil {
+	if err := counted.Delete(context.Background(), service); err != nil {
 		t.Fatalf("delete Service: %v", err)
 	}
 	counted.resetCounts()
@@ -331,7 +331,7 @@ func TestDeletedResourceNeedsNoFinalizerCleanup(t *testing.T) {
 	modelDeployment := validModelDeployment()
 	reconciler, counted := newTestReconciler(t, modelDeployment)
 	reconcileSuccessfully(t, reconciler, modelDeployment)
-	if err := counted.Client.Delete(context.Background(), modelDeployment); err != nil {
+	if err := counted.Delete(context.Background(), modelDeployment); err != nil {
 		t.Fatalf("delete ModelDeployment: %v", err)
 	}
 
