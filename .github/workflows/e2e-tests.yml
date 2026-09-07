@@ -70,6 +70,15 @@ jobs:
         echo "=== POD DETAILS ==="
         kubectl describe pod -n kernexys-system -l app=kernexys-api || true
 
+        echo "=== CONTROLLER LOGS ==="
+        kubectl logs -n kernexys-system -l app.kubernetes.io/name=kernexys-controller --all-containers=true --tail=200 || true
+
+        echo "=== MIGRATION LOGS ==="
+        kubectl logs -n kernexys-system -l app=kernexys-migrate --all-containers=true --tail=200 || true
+
+        echo "=== NAMESPACE EVENTS ==="
+        kubectl get events -n kernexys-system --sort-by=.lastTimestamp || true
+
         echo "=== NETWORK POLICIES ==="
         kubectl get networkpolicy -n kernexys-system -o yaml || true
 
@@ -94,7 +103,8 @@ jobs:
         kubectl describe nodes > /tmp/e2e-logs/nodes.txt
         kubectl describe pods -A > /tmp/e2e-logs/pods.txt
         kubectl logs -n kernexys-system -l app=kernexys-api --all-containers=true > /tmp/e2e-logs/api.log || true
-        kubectl logs -n kernexys-system -l app=kernexys-controller --all-containers=true > /tmp/e2e-logs/controller.log || true
+        kubectl logs -n kernexys-system -l app.kubernetes.io/name=kernexys-controller --all-containers=true > /tmp/e2e-logs/controller.log || true
+        kubectl get events -n kernexys-system --sort-by=.lastTimestamp > /tmp/e2e-logs/events.txt || true
 
     - name: Upload logs
       if: always()

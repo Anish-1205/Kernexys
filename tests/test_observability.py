@@ -5,6 +5,7 @@ import logging
 
 from app.metrics import MetricsCollector
 from app.observability import (
+    ContextAwareLogger,
     StructuredFormatter,
     configure_logging,
     get_correlation_id,
@@ -206,6 +207,33 @@ class TestStructuredFormatter:
         assert parsed["level"] == "ERROR"
         assert "exception" in parsed
         assert "ValueError: Test error" in parsed["exception"]
+
+
+class TestContextAwareLogger:
+    """Test that the correlation-injecting logger keeps caller-supplied extras."""
+
+    def test_caller_extra_is_preserved_alongside_correlation_id(self) -> None:
+        set_correlation_id("corr-123")
+        logger = ContextAwareLogger("test.context")
+        records: list[logging.LogRecord] = []
+        logger.addHandler(_capture_handler(records))
+        logger.setLevel(logging.INFO)
+
+        logger.warning("readiness_dependency_unavailable", extra={"dependency": "database"})
+
+        assert len(records) == 1
+        fields = records[0].extra_fields
+        assert fields["dependency"] == "database"
+        assert fields["correlation_id"] == "corr-123"
+        assert json.loads(StructuredFormatter().format(records[0]))["dependency"] == "database"
+
+
+def _capture_handler(sink: list[logging.LogRecord]) -> logging.Handler:
+    class _Handler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            sink.append(record)
+
+    return _Handler()
 
 
 class TestLoggingConfiguration:

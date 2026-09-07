@@ -59,20 +59,18 @@ class ContextAwareLogger(logging.Logger):
         stack_info: bool = False,
         stacklevel: int = 1,
     ) -> None:
-        """Override _log to add correlation ID to extra fields."""
-        if extra is None:
-            extra = {}
-
-        extra["extra_fields"] = {
-            "correlation_id": get_correlation_id(),
-        }
+        """Override _log to add correlation ID without dropping caller extras."""
+        fields: dict[str, Any] = {"correlation_id": get_correlation_id()}
+        if extra:
+            fields.update(extra.get("extra_fields", {}))
+            fields.update({key: value for key, value in extra.items() if key != "extra_fields"})
 
         super()._log(
             level,
             msg,
             args,
             exc_info=exc_info,
-            extra=extra,
+            extra={"extra_fields": fields},
             stack_info=stack_info,
             stacklevel=stacklevel + 1,
         )
