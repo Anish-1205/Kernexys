@@ -90,6 +90,7 @@ def create_app(
 
     # Add metrics endpoint if enabled
     if resolved_settings.metrics_enabled:
+
         @application.get("/metrics")
         async def get_metrics() -> Response:
             """Prometheus metrics endpoint."""

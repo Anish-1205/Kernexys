@@ -16,15 +16,15 @@ jobs:
     name: Lint Go Code
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
-        go-version: '1.22'
+        go-version: '1.26.x'
     
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v9
       with:
         version: latest
         working-directory: controller
@@ -33,12 +33,12 @@ jobs:
     name: Test Go Controller
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
-        go-version: '1.22'
+        go-version: '1.26.x'
     
     - name: Download dependencies
       working-directory: controller
@@ -49,7 +49,7 @@ jobs:
       run: go test -v -race -coverprofile=coverage.out ./...
     
     - name: Upload coverage
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v7
       with:
         files: ./controller/coverage.out
         flags: controller
@@ -59,12 +59,12 @@ jobs:
     name: Vet Go Code
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
-        go-version: '1.22'
+        go-version: '1.26.x'
     
     - name: Run go vet
       working-directory: controller
@@ -74,19 +74,19 @@ jobs:
     name: Build Go Controller
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
-        go-version: '1.22'
+        go-version: '1.26.x'
     
     - name: Build controller binary
       working-directory: controller
       run: go build -o bin/manager cmd/main.go
     
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
         name: controller-binary
         path: controller/bin/manager

@@ -11,83 +11,58 @@ jobs:
     name: E2E Tests on Kind
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
-        go-version: '1.22'
+        go-version: '1.26.x'
     
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: '3.11'
         cache: pip
     
     - name: Create kind cluster
-      uses: helm/kind-action@v1.9.0
+      uses: helm/kind-action@v1.15.0
       with:
+        version: v0.33.0
         cluster_name: kernexys-test
         config: deploy/kind/config.yaml
+        node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+        wait: 120s
     
     - name: Build and load API image
       run: |
-        docker build -f Dockerfile -t kernexys:latest .
-        kind load docker-image kernexys:latest --name kernexys-test
+        docker build -f Dockerfile -t kernexys/control-api:dev .
+        kind load docker-image kernexys/control-api:dev --name kernexys-test
     
     - name: Build and load controller image
       run: |
-        docker build -f controller/Dockerfile -t kernexys-controller:latest controller/
-        kind load docker-image kernexys-controller:latest --name kernexys-test
+        docker build -f controller/Dockerfile -t kernexys/controller:dev controller/
+        kind load docker-image kernexys/controller:dev --name kernexys-test
     
     - name: Build and load runtime image
       run: |
-        docker build -f runtime/Dockerfile -t kernexys-runtime:latest runtime/
-        kind load docker-image kernexys-runtime:latest --name kernexys-test
-    
-    - name: Install kustomize
-      run: |
-        mkdir -p /tmp/kustomize
-        cd /tmp/kustomize
-        wget -q https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.3.0/kustomize_v5.3.0_linux_amd64.tar.gz
-        tar xzf kustomize_v5.3.0_linux_amd64.tar.gz
-        sudo mv kustomize /usr/local/bin/
+        docker build --build-arg MODEL_VERSION=v1 -f runtime/Dockerfile -t kernexys/model-runtime:v1 runtime/
+        docker build --build-arg MODEL_VERSION=v2 -f runtime/Dockerfile -t kernexys/model-runtime:v2 runtime/
+        kind load docker-image kernexys/model-runtime:v1 kernexys/model-runtime:v2 --name kernexys-test
     
     - name: Deploy to kind cluster
-      run: |
-        kubectl create namespace kernexys-system
-        kubectl create namespace kernexys-workers
-        
-        # Create secrets (use test values)
-        kubectl create secret generic kernexys-db \
-          -n kernexys-system \
-          --from-literal=url='postgresql+asyncpg://test:test@localhost:5432/test'
-        
-        kubectl create secret generic kernexys-redis \
-          -n kernexys-system \
-          --from-literal=url='redis://localhost:6379/0'
-        
-        # Apply kustomization
-        kustomize build controller/config/ | kubectl apply -f -
+      env:
+        KERNEXYS_POSTGRES_PASSWORD: ci-only-url-safe-password
+      run: make kind-install
     
     - name: Wait for deployments
-      run: |
-        kubectl -n kernexys-system rollout status deployment/kernexys-api --timeout=5m
-        kubectl -n kernexys-system rollout status deployment/kernexys-controller --timeout=5m
+      run: make kind-validate
     
     - name: Check API is responsive
       run: |
         kubectl -n kernexys-system port-forward svc/kernexys-api 8000:8000 &
         sleep 5
-        curl -f http://localhost:8000/health/live || echo "API health check"
-    
-    - name: Install test dependencies
-      run: |
-        pip install aiohttp pytest pytest-asyncio pyyaml kubernetes
-    
-    - name: Run integration tests
-      run: |
-        python -m pytest tests/integration/ -v --timeout=30 || true
+        curl --fail --show-error http://localhost:8000/health/live
+        curl --fail --show-error http://localhost:8000/health/ready
     
     - name: Collect cluster logs
       if: always()
@@ -100,7 +75,7 @@ jobs:
     
     - name: Upload logs
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
         name: e2e-logs
         path: /tmp/e2e-logs/

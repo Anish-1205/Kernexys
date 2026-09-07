@@ -2,15 +2,9 @@ from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 CRD_PATH = (
-    ROOT
-    / "controller"
-    / "config"
-    / "crd"
-    / "bases"
-    / "platform.kernexys.io_modeldeployments.yaml"
+    ROOT / "controller" / "config" / "crd" / "bases" / "platform.kernexys.io_modeldeployments.yaml"
 )
 
 

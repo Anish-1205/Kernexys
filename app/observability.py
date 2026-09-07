@@ -9,10 +9,7 @@ import uuid
 from contextvars import ContextVar
 from typing import Any
 
-
-correlation_id_var: ContextVar[str] = ContextVar(
-    "correlation_id", default=str(uuid.uuid4())
-)
+correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default=str(uuid.uuid4()))
 
 
 def get_correlation_id() -> str:
@@ -65,13 +62,19 @@ class ContextAwareLogger(logging.Logger):
         """Override _log to add correlation ID to extra fields."""
         if extra is None:
             extra = {}
-        
+
         extra["extra_fields"] = {
             "correlation_id": get_correlation_id(),
         }
-        
+
         super()._log(
-            level, msg, args, exc_info=exc_info, extra=extra, stack_info=stack_info, stacklevel=stacklevel + 1
+            level,
+            msg,
+            args,
+            exc_info=exc_info,
+            extra=extra,
+            stack_info=stack_info,
+            stacklevel=stacklevel + 1,
         )
 
 

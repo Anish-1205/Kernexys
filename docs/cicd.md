@@ -169,17 +169,21 @@ Runs end-to-end tests in a kind cluster on every push/PR.
 2. Build all images locally
 3. Load images into kind cluster
 4. Create namespaces and secrets
-5. Deploy with Kustomize
+5. Bootstrap PostgreSQL, migrations, the API, CRD, and controller with the
+   checked-in Make targets
 6. Wait for rollout completion
-7. Run integration tests
+7. Probe API liveness and database/Kubernetes-backed readiness
 8. Collect logs and artifacts
 
 **Test Execution**:
 
 ```bash
-kind create cluster --config deploy/kind/config.yaml
-kubectl apply -k controller/config/
-python -m pytest tests/integration/ -v
+export KERNEXYS_POSTGRES_PASSWORD='replace-with-a-url-safe-test-password'
+make kind-create KIND_CLUSTER_NAME=kernexys-test
+make kind-build
+make kind-load KIND_CLUSTER_NAME=kernexys-test
+make kind-install
+make kind-validate
 ```
 
 **Artifacts** (on failure):

@@ -292,23 +292,23 @@ class TestKedaStaticValidation:
         manifest = KEDA_CONFIG_DIR / "namespace.yaml"
         assert manifest.exists(), f"Namespace manifest not found at {manifest}"
 
-    def test_kubectl_dry_run_succeeds(self) -> None:
-        """kubectl apply --dry-run should validate all manifests."""
+    def test_kubectl_kustomize_succeeds(self) -> None:
+        """kubectl should render the complete Kustomize package offline."""
         try:
-            # This requires kubectl to be installed
             result = subprocess.run(
-                ["kubectl", "apply", "-k", str(KEDA_CONFIG_DIR), "--dry-run=client"],
+                ["kubectl", "kustomize", str(KEDA_CONFIG_DIR)],
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
 
-            # Dry-run should succeed
-            assert result.returncode == 0, f"kubectl validation failed: {result.stderr}"
+            assert result.returncode == 0, f"kubectl rendering failed: {result.stderr}"
+            assert "kind: ScaledObject" in result.stdout
+            assert "kind: TriggerAuthentication" in result.stdout
         except FileNotFoundError:
             pytest.skip("kubectl not available")
         except subprocess.TimeoutExpired:
-            pytest.skip("kubectl validation timed out")
+            pytest.skip("kubectl rendering timed out")
 
     def test_scaling_formula_correctness(self) -> None:
         """Verify KEDA scaling formula is correct."""

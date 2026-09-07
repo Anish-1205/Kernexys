@@ -121,5 +121,7 @@ class Settings:
             metrics_enabled=_boolean("KERNEXYS_METRICS_ENABLED", True),
             metrics_port=_positive_int("KERNEXYS_METRICS_PORT", 8001),
             logging_format=os.getenv("KERNEXYS_LOGGING_FORMAT", "json").lower(),
-            logging_correlation_id_enabled=_boolean("KERNEXYS_LOGGING_CORRELATION_ID_ENABLED", True),
+            logging_correlation_id_enabled=_boolean(
+                "KERNEXYS_LOGGING_CORRELATION_ID_ENABLED", True
+            ),
         )
