@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	platformv1alpha1 "github.com/kernexys/kernexys/controller/api/v1alpha1"
-	kernexyscontroller "github.com/kernexys/kernexys/controller/internal/controller"
+	platformv1alpha1 "github.com/Anish-1205/Kernexys/controller/api/v1alpha1"
+	kernexyscontroller "github.com/Anish-1205/Kernexys/controller/internal/controller"
 )
 
 func main() {

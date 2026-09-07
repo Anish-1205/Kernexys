@@ -4,6 +4,36 @@ Kernexys is a local-first AI infrastructure control plane. A Kubernetes
 `ModelDeployment` is the source of truth, and the Go controller continuously
 reconciles that declaration into an owned Deployment and Service.
 
+> [!NOTE]
+> Kernexys is under active development. It is suitable for local development,
+> architecture exploration, and testing—not production workloads yet.
+
+## Architecture at a glance
+
+```text
+Developer (REST / CLI / kubectl)
+              |
+              v
+  FastAPI control API ---- PostgreSQL model registry
+              |
+              v
+  ModelDeployment custom resource
+              |
+              v
+      Go reconciliation controller
+              |
+              v
+  Kubernetes Deployment + Service ---- Reference model runtime
+
+Optional async path: API -> bounded Redis queue -> worker -> runtime
+```
+
+The control API owns registry validation and desired-state submission. The Go
+controller alone owns workload reconciliation, while deployed runtimes remain
+independent of the control plane while serving inference. See the
+[architecture guide](docs/architecture.md) for component boundaries, data
+ownership, and failure behavior.
+
 The repository is being built in validated vertical slices. Implemented slices
 currently include:
 
@@ -137,3 +167,33 @@ curl http://127.0.0.1:8000/health/ready
 Compose starts PostgreSQL, runs migrations to completion, and then starts the API.
 `docker compose down` preserves database data. `make container-clean` is explicitly
 destructive and also removes the local PostgreSQL volume.
+
+## Documentation
+
+The [documentation index](docs/README.md) links the setup, architecture,
+operations, security, CI/CD, component, and design-decision guides. Start with:
+
+- [Local development](docs/development.md) for configuration and test commands;
+- [Architecture](docs/architecture.md) for system boundaries and failure modes;
+- [Local kind environment](docs/kind.md) for the end-to-end Kubernetes workflow;
+- [Security](docs/security.md) for the current threat model and controls;
+- [CI/CD](docs/cicd.md) for automated validation and image publishing.
+
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| `app/` | FastAPI control plane, CLI, queue, and worker |
+| `controller/` | Go Kubernetes controller and `ModelDeployment` API |
+| `runtime/` | Independently packaged reference inference service |
+| `helm/kernexys/` | Helm chart and packaged CRD |
+| `deploy/kind/` | Reproducible local kind dependencies and bootstrap |
+| `migrations/` | Alembic migrations for the model registry |
+| `docs/` | Architecture, operations, security, and ADRs |
+| `tests/` | Python unit, contract, and integration tests |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, validation
+expectations, and pull-request checklist. Please report security issues using
+the process in [SECURITY.md](SECURITY.md).

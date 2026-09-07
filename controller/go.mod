@@ -1,4 +1,4 @@
-module github.com/kernexys/kernexys/controller
+module github.com/Anish-1205/Kernexys/controller
 
 go 1.26.0
 

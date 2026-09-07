@@ -10,6 +10,10 @@
 .test-tmp/
 .tools/
 .venv/
+.claude/settings.local.json
+*-test-tmp/
+/tmp/
+/Kernexys_project_overview.md
 *.db
 *.egg-info/
 *.py[cod]
