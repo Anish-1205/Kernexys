@@ -24,7 +24,7 @@ jobs:
         version: 'latest'
     
     - name: Lint Helm chart
-      run: helm lint helm/kernexys/ -v
+      run: helm lint helm/kernexys/
     
     - name: Template chart
       run: helm template kernexys helm/kernexys/ > /tmp/manifests.yaml
@@ -73,8 +73,8 @@ jobs:
       run: |
         mkdir -p /tmp/helm-docs
         cd /tmp/helm-docs
-        wget -q https://github.com/norwoodj/helm-docs/releases/download/v1.13.0/helm-docs_linux_amd64.tar.gz
-        tar xzf helm-docs_linux_amd64.tar.gz
+        wget -q https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.tar.gz
+        tar xzf helm-docs_1.14.2_Linux_x86_64.tar.gz
         chmod +x helm-docs
     
     - name: Generate documentation
