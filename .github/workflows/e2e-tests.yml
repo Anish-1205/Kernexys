@@ -10,20 +10,21 @@ jobs:
   e2e:
     name: E2E Tests on Kind
     runs-on: ubuntu-latest
+
     steps:
     - uses: actions/checkout@v7
-    
+
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
         go-version: '1.26.x'
-    
+
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
         python-version: '3.11'
         cache: pip
-    
+
     - name: Create kind cluster
       uses: helm/kind-action@v1.15.0
       with:
@@ -32,38 +33,44 @@ jobs:
         config: deploy/kind/config.yaml
         node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
         wait: 120s
-    
+
     - name: Build and load API image
       run: |
         docker build -f Dockerfile -t kernexys/control-api:dev .
         kind load docker-image kernexys/control-api:dev --name kernexys-test
-    
+
     - name: Build and load controller image
       run: |
         docker build -f controller/Dockerfile -t kernexys/controller:dev controller/
         kind load docker-image kernexys/controller:dev --name kernexys-test
-    
+
     - name: Build and load runtime image
       run: |
         docker build --build-arg MODEL_VERSION=v1 -f runtime/Dockerfile -t kernexys/model-runtime:v1 runtime/
         docker build --build-arg MODEL_VERSION=v2 -f runtime/Dockerfile -t kernexys/model-runtime:v2 runtime/
         kind load docker-image kernexys/model-runtime:v1 kernexys/model-runtime:v2 --name kernexys-test
-    
+
     - name: Deploy to kind cluster
       env:
         KERNEXYS_POSTGRES_PASSWORD: ci-only-url-safe-password
       run: make kind-install
-    
+
+    - name: Debug readiness
+      run: |
+        kubectl get pods -n kernexys-system -o wide
+        kubectl get svc -n kernexys-system
+        kubectl describe pod -n kernexys-system -l app=kernexys-api
+
     - name: Wait for deployments
       run: make kind-validate
-    
+
     - name: Check API is responsive
       run: |
         kubectl -n kernexys-system port-forward svc/kernexys-api 8000:8000 &
         sleep 5
         curl --fail --show-error http://localhost:8000/health/live
         curl --fail --show-error http://localhost:8000/health/ready
-    
+
     - name: Collect cluster logs
       if: always()
       run: |
@@ -72,7 +79,7 @@ jobs:
         kubectl describe pods -A > /tmp/e2e-logs/pods.txt
         kubectl logs -n kernexys-system -l app=kernexys-api --all-containers=true > /tmp/e2e-logs/api.log || true
         kubectl logs -n kernexys-system -l app=kernexys-controller --all-containers=true > /tmp/e2e-logs/controller.log || true
-    
+
     - name: Upload logs
       if: always()
       uses: actions/upload-artifact@v7
