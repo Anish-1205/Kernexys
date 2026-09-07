@@ -55,14 +55,30 @@ jobs:
         KERNEXYS_POSTGRES_PASSWORD: ci-only-url-safe-password
       run: make kind-install
 
-    - name: Debug readiness
-      run: |
-        kubectl get pods -n kernexys-system -o wide
-        kubectl get svc -n kernexys-system
-        kubectl describe pod -n kernexys-system -l app=kernexys-api
-
     - name: Wait for deployments
       run: make kind-validate
+
+    - name: Debug failed deployment
+      if: failure()
+      run: |
+        echo "=== PODS ==="
+        kubectl get pods -n kernexys-system -o wide
+
+        echo "=== API LOGS ==="
+        kubectl logs -n kernexys-system -l app=kernexys-api --all-containers=true --tail=200 || true
+
+        echo "=== POD DETAILS ==="
+        kubectl describe pod -n kernexys-system -l app=kernexys-api || true
+
+        echo "=== NETWORK POLICIES ==="
+        kubectl get networkpolicy -n kernexys-system -o yaml || true
+
+        echo "=== READINESS RESPONSE ==="
+        POD=$(kubectl get pods -n kernexys-system -l app=kernexys-api -o jsonpath='{.items[0].metadata.name}')
+        kubectl port-forward -n kernexys-system pod/$POD 8000:8000 >/tmp/port-forward.log 2>&1 &
+        sleep 3
+        curl -sS http://localhost:8000/health/ready || true
+        echo
 
     - name: Check API is responsive
       run: |
