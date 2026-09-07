@@ -66,6 +66,14 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+    {{- range .Values.api.networkPolicy.kubernetesApiEndpoints }}
+    - to:
+        - ipBlock:
+            cidr: {{ .cidr | quote }}
+      ports:
+        - protocol: TCP
+          port: {{ .port }}
+    {{- end }}
     # Allow to workers for async queue management.
     - to:
         - namespaceSelector:

@@ -71,6 +71,11 @@ api:
 
   networkPolicy:
     enabled: true
+    # Add the Kubernetes Service VIP or control-plane CIDRs used by the target
+    # CNI when a pod selector cannot match the API server endpoint.
+    kubernetesApiEndpoints: []
+    # - cidr: 10.96.0.1/32
+    #   port: 443
 
 # Async inference worker (Redis queue consumer, KEDA-scaled).
 worker:

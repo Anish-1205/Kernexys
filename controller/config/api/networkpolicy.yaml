@@ -62,6 +62,20 @@ spec:
     ports:
     - protocol: TCP
       port: 443
+  # kind exposes the API through a Service VIP backed by a host-network process.
+  # NetworkPolicy implementations may evaluate either address around DNAT.
+  - to:
+    - ipBlock:
+        cidr: 10.96.0.1/32
+    ports:
+    - protocol: TCP
+      port: 443
+  - to:
+    - ipBlock:
+        cidr: 172.18.0.0/16
+    ports:
+    - protocol: TCP
+      port: 6443
   # Allow to workers for async queue management
   - to:
     - namespaceSelector:

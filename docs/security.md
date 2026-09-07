@@ -83,7 +83,10 @@ Restricts API pod network traffic:
 - To kube-dns for service discovery (DNS)
 - To PostgreSQL for database access
 - To Redis for async queue operations
-- To Kubernetes API for resource management
+- To the Kubernetes API for resource management. The raw kind manifest allows
+  its pinned Service VIP and Docker control-plane subnet because policy engines
+  may evaluate traffic on either side of Service DNAT. Helm users can add their
+  cluster-specific endpoints with `api.networkPolicy.kubernetesApiEndpoints`.
 - To worker pods for queue operations (future)
 
 ### Default Deny
