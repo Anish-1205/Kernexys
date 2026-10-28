@@ -42,6 +42,7 @@ $env:KERNEXYS_DATABASE_URL = "postgresql+asyncpg://kernexys:kernexys@localhost:5
 | `KERNEXYS_ASYNC_JOB_TTL_SECONDS` | `3600` | Job and result retention |
 | `KERNEXYS_ASYNC_WORKER_CONCURRENCY` | `4` | Concurrent worker consumers |
 | `KERNEXYS_ASYNC_INFERENCE_TIMEOUT_SECONDS` | `30` | Worker runtime-call deadline |
+| `KERNEXYS_INFERENCE_TIMEOUT_SECONDS` | `10` | Synchronous inference proxy runtime-call deadline |
 
 Every positive numeric setting is validated at startup. Unknown JSON fields and
 invalid resource names are rejected. Caller-supplied `X-Request-ID` values are

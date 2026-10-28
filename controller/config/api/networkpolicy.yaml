@@ -76,6 +76,17 @@ spec:
     ports:
     - protocol: TCP
       port: 6443
+  # Allow the synchronous inference proxy to reach controller-managed runtimes
+  # on their default port (a non-default spec.runtime.port needs its own rule).
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: model-runtime
+          app.kubernetes.io/managed-by: kernexys-controller
+    ports:
+    - protocol: TCP
+      port: 8080
   # Allow to workers for async queue management
   - to:
     - namespaceSelector:

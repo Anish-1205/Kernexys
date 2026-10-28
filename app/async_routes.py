@@ -10,7 +10,12 @@ from uuid import uuid4
 from fastapi import APIRouter, Header, Request, Response
 
 from app.async_queue import AsyncQueueError, RedisInferenceQueue
-from app.deployment_routes import Gateway, NamespacedResourceName, _deployment_error
+from app.deployment_routes import (
+    Gateway,
+    NamespacedResourceName,
+    _deployment_error,
+    _ready_endpoint,
+)
 from app.errors import ApiError
 from app.kubernetes import DeploymentGatewayError
 from app.schemas import AsyncInferenceJob, AsyncInferenceRequest
@@ -39,14 +44,7 @@ async def enqueue_job(
         deployment = await gateway.get(namespace, name)
     except DeploymentGatewayError as exc:
         raise _deployment_error(exc, namespace, name) from exc
-    status = deployment.get("status", {})
-    endpoint = status.get("endpoint")
-    available = any(
-        condition.get("type") == "Available" and condition.get("status") == "True"
-        for condition in status.get("conditions", [])
-    )
-    if not available or not isinstance(endpoint, str) or not endpoint:
-        raise ApiError(409, "deployment_not_ready", "The model deployment is not ready.")
+    endpoint = _ready_endpoint(deployment)
 
     job_id = str(uuid4())
     if idempotency_key:

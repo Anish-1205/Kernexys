@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kernexys Console</title>
+<style>
+  :root {
+    --bg: #0b0f17; --panel: #121826; --panel-2: #182032; --border: #243049;
+    --text: #e6ebf5; --muted: #8a96ad; --accent: #6c8cff; --accent-2: #9b7bff;
+    --ok: #3ddc97; --warn: #ffc857; --bad: #ff6b7a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, rgba(108,140,255,.12), rgba(155,123,255,.06) 60%, transparent);
+  }
+  .logo { font-weight: 700; font-size: 18px; letter-spacing: .3px; }
+  .logo span { background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .tagline { color: var(--muted); font-size: 13px; }
+  .pills { margin-left: auto; display: flex; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+    border: 1px solid var(--border); border-radius: 999px; font-size: 12px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  .dot.bad { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
+  main { display: grid; gap: 16px; padding: 16px 24px 24px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+    min-width: 0; }
+  h2 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  h3 { margin: 16px 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input, select, textarea {
+    width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text); font: inherit;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  textarea { resize: vertical; min-height: 72px; }
+  .row { display: flex; gap: 8px; align-items: end; }
+  .row > * { flex: 1; min-width: 0; }
+  .stack > * + * { margin-top: 10px; }
+  button {
+    padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer;
+    background: var(--panel-2); color: var(--text); font: inherit; font-weight: 600; white-space: nowrap;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: linear-gradient(90deg, var(--accent), var(--accent-2)); border: 0; color: #fff; }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: progress; }
+  .model { border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--panel-2); }
+  .model + .model { margin-top: 8px; }
+  .model b { font-family: var(--mono); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .tag { font: 12px var(--mono); padding: 2px 8px; border-radius: 6px; background: #1f2a44; color: #b9c6ff; }
+  .empty { color: var(--muted); font-style: italic; }
+  .status-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .big { font-size: 28px; font-weight: 700; font-family: var(--mono); }
+  .replicas { display: flex; gap: 6px; margin: 12px 0; flex-wrap: wrap; }
+  .pod { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2);
+    display: grid; place-items: center; font-size: 11px; color: var(--muted); transition: all .3s; }
+  .pod.ready { background: rgba(61,220,151,.15); border-color: var(--ok); color: var(--ok); }
+  .grid2 { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+  .grid2 dt { color: var(--muted); }
+  .grid2 dd { margin: 0; font-family: var(--mono); overflow-wrap: anywhere; }
+  .conds { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .cond { font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); }
+  .cond.true { border-color: var(--ok); color: var(--ok); }
+  .cond.false { color: var(--muted); }
+  .cond.bad.true { border-color: var(--bad); color: var(--bad); }
+  .result { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px;
+    background: var(--panel-2); border: 1px solid var(--border); animation: pop .25s ease-out; }
+  .result + .result { margin-top: 6px; }
+  .label { font-weight: 700; text-transform: uppercase; font-size: 12px; padding: 2px 8px; border-radius: 6px; }
+  .label.positive { background: rgba(61,220,151,.15); color: var(--ok); }
+  .label.negative { background: rgba(255,107,122,.15); color: var(--bad); }
+  .label.neutral { background: rgba(255,200,87,.15); color: var(--warn); }
+  .bar { flex: 0 0 60px; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .result .text { flex: 1; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mono { font-family: var(--mono); font-size: 12px; }
+  #log { font: 12px/1.6 var(--mono); max-height: 220px; overflow: auto; }
+  #log div { white-space: pre-wrap; overflow-wrap: anywhere; }
+  #log .err { color: var(--bad); }
+  #log .ok { color: var(--ok); }
+  #log time { color: var(--muted); margin-right: 8px; }
+  @keyframes pop { from { transform: translateY(-4px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><span>Kernexys</span> Console</div>
+  <div class="tagline">ModelDeployment CR &rarr; Go controller &rarr; Deployment + Service &rarr; runtime</div>
+  <div class="pills">
+    <span class="pill"><span class="dot" id="live-dot"></span>API live</span>
+    <span class="pill"><span class="dot" id="ready-dot"></span>DB + Kubernetes ready</span>
+  </div>
+</header>
+
+<main>
+  <section aria-labelledby="registry-h">
+    <h2 id="registry-h">Model registry</h2>
+    <div id="models"><p class="empty">Loading…</p></div>
+
+    <h3>Register a version</h3>
+    <form id="register" class="stack">
+      <div class="row">
+        <div><label for="reg-model">Model</label><input id="reg-model" value="sentiment" required></div>
+        <div><label for="reg-version">Version</label><input id="reg-version" value="v1" required></div>
+      </div>
+      <div><label for="reg-image">Runtime image</label><input id="reg-image" value="kernexys/model-runtime:v1" required></div>
+      <button type="submit">Register</button>
+    </form>
+  </section>
+
+  <section aria-labelledby="deploy-h">
+    <h2 id="deploy-h">Deployment</h2>
+    <div class="row">
+      <div><label for="ns">Namespace</label><input id="ns" value="default"></div>
+      <div><label for="name">Name</label><input id="name" value="sentiment"></div>
+    </div>
+
+    <div id="status" style="margin-top:16px"></div>
+
+    <h3>Desired state</h3>
+    <form id="deploy" class="row">
+      <div><label for="dep-model">Model</label><select id="dep-model"></select></div>
+      <div><label for="dep-version">Version</label><select id="dep-version"></select></div>
+      <div style="flex:.6"><label for="dep-replicas">Replicas</label><input id="dep-replicas" type="number" min="1" max="10" value="2"></div>
+      <button type="submit" class="primary">Apply</button>
+    </form>
+    <div class="row" style="margin-top:10px">
+      <div><label for="rb-version">Roll back to</label><select id="rb-version"></select></div>
+      <button id="rollback" type="button">Roll back</button>
+      <button id="delete" type="button" class="danger">Delete</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="infer-h">
+    <h2 id="infer-h">Inference</h2>
+    <form id="infer" class="stack">
+      <div><label for="text">Text</label><textarea id="text">I love how reliable this platform is</textarea></div>
+      <button type="submit" class="primary">Run inference</button>
+    </form>
+    <h3>Results</h3>
+    <div id="results"><p class="empty">No requests yet.</p></div>
+
+    <h3>Activity</h3>
+    <div id="log" aria-live="polite"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+const target = () => `${encodeURIComponent($("ns").value.trim())}/${encodeURIComponent($("name").value.trim())}`;
+let versionsByModel = {};
+
+function log(message, kind = "") {
+  const line = el("div", kind);
+  line.append(el("time", "", new Date().toLocaleTimeString()), message);
+  $("log").prepend(line);
+}
+
+async function api(method, path, body) {
+  const response = await fetch(path, {
+    method,
+    headers: body ? { "content-type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = response.status === 204 ? null : await response.json().catch(() => null);
+  if (!response.ok) {
+    const err = data && data.error ? `${data.error.code}: ${data.error.message}` : `HTTP ${response.status}`;
+    throw new Error(err);
+  }
+  return data;
+}
+
+async function action(button, label, fn) {
+  button.disabled = true;
+  try { await fn(); log(label, "ok"); }
+  catch (e) { log(`${label} failed — ${e.message}`, "err"); }
+  finally { button.disabled = false; refreshStatus(); }
+}
+
+function setDot(id, state) { $(id).className = `dot ${state}`; }
+
+async function refreshHealth() {
+  try { await api("GET", "/health/live"); setDot("live-dot", "ok"); } catch { setDot("live-dot", "bad"); }
+  try { await api("GET", "/health/ready"); setDot("ready-dot", "ok"); } catch { setDot("ready-dot", "bad"); }
+}
+
+async function refreshModels() {
+  try {
+    const models = (await api("GET", "/v1/models?limit=100")).items;
+    versionsByModel = {};
+    const box = $("models");
+    box.replaceChildren();
+    if (!models.length) box.append(el("p", "empty", "No models registered."));
+    for (const model of models) {
+      const versions = (await api("GET", `/v1/models/${encodeURIComponent(model.name)}/versions?limit=100`)).items;
+      versionsByModel[model.name] = versions.map((v) => v.version);
+      const card = el("div", "model");
+      card.append(el("b", "", model.name));
+      if (model.description) card.append(el("div", "mono", model.description));
+      const tags = el("div", "tags");
+      for (const v of versions) {
+        const tag = el("span", "tag", v.version);
+        tag.title = v.runtime_image;
+        tags.append(tag);
+      }
+      if (!versions.length) tags.append(el("span", "empty", "no versions"));
+      card.append(tags);
+      box.append(card);
+    }
+    fillSelect($("dep-model"), Object.keys(versionsByModel));
+    syncVersionSelects();
+  } catch (e) {
+    $("models").replaceChildren(el("p", "empty", `Registry unavailable — ${e.message}`));
+  }
+}
+
+function fillSelect(select, values) {
+  const current = select.value;
+  select.replaceChildren(...values.map((v) => { const o = el("option", "", v); o.value = v; return o; }));
+  if (values.includes(current)) select.value = current;
+}
+
+function syncVersionSelects() {
+  const versions = versionsByModel[$("dep-model").value] || [];
+  fillSelect($("dep-version"), versions);
+  fillSelect($("rb-version"), versions);
+}
+
+let lastSignature = "";
+async function refreshStatus() {
+  const box = $("status");
+  let d;
+  try { d = await api("GET", `/v1/deployments/${target()}`); }
+  catch (e) {
+    box.replaceChildren(el("p", "empty", e.message.startsWith("deployment_not_found") ? "Not deployed." : e.message));
+    lastSignature = "";
+    return;
+  }
+  const s = d.status;
+  const signature = `${s.activeVersion}|${s.readyReplicas}/${s.desiredReplicas}`;
+  if (lastSignature && signature !== lastSignature) log(`controller: ${signature.replace("|", " · ready ")}`);
+  lastSignature = signature;
+
+  const head = el("div", "status-head");
+  head.append(el("div", "big", s.activeVersion || d.spec.version));
+  const available = s.conditions.find((c) => c.type === "Available")?.status === "True";
+  const progressing = s.conditions.find((c) => c.type === "Progressing")?.status === "True";
+  const pill = el("span", "pill");
+  // The controller reports Available=False mid-rollout; show that as progress, not failure.
+  pill.append(el("span", `dot ${progressing ? "warn" : available ? "ok" : "bad"}`),
+    progressing ? "Rolling out" : available ? "Available" : "Not available");
+  head.append(pill);
+
+  const pods = el("div", "replicas");
+  const total = Math.max(s.desiredReplicas, d.spec.replicas);
+  for (let i = 0; i < total; i++) pods.append(el("div", `pod ${i < s.readyReplicas ? "ready" : ""}`, i + 1));
+
+  const facts = el("dl", "grid2");
+  for (const [k, v] of [
+    ["desired", `${d.spec.model}:${d.spec.version} × ${d.spec.replicas}`],
+    ["ready", `${s.readyReplicas}/${s.desiredReplicas}`],
+    ["image", d.spec.runtime_image],
+    ["generation", `${d.generation} (observed ${s.observedGeneration})`],
+    ["endpoint", s.endpoint || "—"],
+  ]) facts.append(el("dt", "", k), el("dd", "", v));
+
+  const conds = el("div", "conds");
+  for (const c of s.conditions) {
+    const chip = el("span", `cond ${c.status === "True" ? "true" : "false"} ${c.type === "Degraded" ? "bad" : ""}`, c.type);
+    chip.title = `${c.reason}: ${c.message}`;
+    conds.append(chip);
+  }
+  box.replaceChildren(head, pods, facts, conds);
+}
+
+$("dep-model").addEventListener("change", syncVersionSelects);
+$("ns").addEventListener("change", refreshStatus);
+$("name").addEventListener("change", refreshStatus);
+
+$("register").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const model = $("reg-model").value.trim(), version = $("reg-version").value.trim();
+  action(e.submitter, `registered ${model}:${version}`, async () => {
+    await api("PUT", `/v1/models/${encodeURIComponent(model)}`, {});
+    await api("PUT", `/v1/models/${encodeURIComponent(model)}/versions/${encodeURIComponent(version)}`,
+      { runtime_image: $("reg-image").value.trim() });
+    await refreshModels();
+  });
+});
+
+$("deploy").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const body = { model: $("dep-model").value, version: $("dep-version").value, replicas: Number($("dep-replicas").value) };
+  action(e.submitter, `applied ${body.model}:${body.version} × ${body.replicas}`,
+    () => api("PUT", `/v1/deployments/${target()}`, body));
+});
+
+$("rollback").addEventListener("click", (e) => {
+  const version = $("rb-version").value;
+  action(e.currentTarget, `rolled back to ${version}`,
+    () => api("POST", `/v1/deployments/${target()}/rollback`, { version }));
+});
+
+$("delete").addEventListener("click", (e) => {
+  if (!confirm(`Delete ${decodeURIComponent(target())}? The controller-owned Deployment and Service will be garbage-collected.`)) return;
+  action(e.currentTarget, `deleted ${decodeURIComponent(target())}`, () => api("DELETE", `/v1/deployments/${target()}`));
+});
+
+$("infer").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const button = e.submitter, text = $("text").value;
+  button.disabled = true;
+  try {
+    const r = await api("POST", `/v1/deployments/${target()}/infer`, { text });
+    const row = el("div", "result");
+    const bar = el("span", "bar"); const fill = el("i"); fill.style.width = `${Math.round(r.confidence * 100)}%`; bar.append(fill);
+    row.append(el("span", `label ${r.label}`, r.label), bar,
+      el("span", "mono", `${(r.confidence * 100).toFixed(1)}%`), el("span", "tag", r.version), el("span", "text", text));
+    row.title = `request ${r.request_id}`;
+    const results = $("results");
+    results.querySelector(".empty")?.remove();
+    results.prepend(row);
+    while (results.children.length > 8) results.lastChild.remove();
+  } catch (err) { log(`inference failed — ${err.message}`, "err"); }
+  finally { button.disabled = false; }
+});
+
+refreshHealth();
+refreshModels().then(refreshStatus);
+setInterval(refreshStatus, 1500);
+setInterval(refreshHealth, 5000);
+</script>
+</body>
+</html>

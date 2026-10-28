@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
+import aiohttp
 from fastapi import APIRouter, Depends, Path, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,7 @@ from app.errors import ApiError
 from app.kubernetes import DeploymentGateway, DeploymentGatewayError
 from app.repository import RegistryRepository
 from app.schemas import (
+    AsyncInferenceRequest,
     DeploymentRead,
     DeploymentResources,
     DeploymentSpecRead,
@@ -153,6 +155,45 @@ async def rollback_deployment(
     except DeploymentGatewayError as exc:
         raise _deployment_error(exc, namespace, name) from exc
     return _resource_to_read(observed)
+
+
+@deployment_router.post("/{namespace}/{name}/infer")
+async def infer(
+    namespace: NamespacedResourceName,
+    name: NamespacedResourceName,
+    body: AsyncInferenceRequest,
+    request: Request,
+    gateway: Gateway,
+) -> dict[str, Any]:
+    """Synchronous convenience proxy to the deployed runtime, used by the dashboard."""
+    try:
+        deployment = await gateway.get(namespace, name)
+    except DeploymentGatewayError as exc:
+        raise _deployment_error(exc, namespace, name) from exc
+    endpoint = _ready_endpoint(deployment)
+    timeout = aiohttp.ClientTimeout(total=request.app.state.settings.inference_timeout_seconds)
+    try:
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.post(f"{endpoint}/v1/infer", json={"text": body.text}) as response,
+        ):
+            if response.status != 200:
+                raise ApiError(502, "runtime_error", "The model runtime failed the request.")
+            return await response.json()
+    except (aiohttp.ClientError, TimeoutError) as exc:
+        raise ApiError(503, "runtime_unavailable", "The model runtime is unavailable.") from exc
+
+
+def _ready_endpoint(deployment: dict[str, Any]) -> str:
+    status = deployment.get("status", {})
+    endpoint = status.get("endpoint")
+    available = any(
+        condition.get("type") == "Available" and condition.get("status") == "True"
+        for condition in status.get("conditions", [])
+    )
+    if not available or not isinstance(endpoint, str) or not endpoint:
+        raise ApiError(409, "deployment_not_ready", "The model deployment is not ready.")
+    return endpoint
 
 
 def _desired_resource(

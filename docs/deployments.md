@@ -32,7 +32,24 @@ PUT    /v1/deployments/{namespace}/{name}
 GET    /v1/deployments/{namespace}/{name}
 DELETE /v1/deployments/{namespace}/{name}
 POST   /v1/deployments/{namespace}/{name}/rollback
+POST   /v1/deployments/{namespace}/{name}/infer
 ```
+
+`infer` is a synchronous convenience proxy used by the web console. It reads the
+controller-reported `status.endpoint`, refuses with `409 deployment_not_ready`
+unless the deployment is `Available` (as the async path does), and forwards
+`{"text": ...}` to the runtime's `/v1/infer` within
+`KERNEXYS_INFERENCE_TIMEOUT_SECONDS`. Runtime failures are sanitized to
+`502 runtime_error` or `503 runtime_unavailable`. This places the API on an
+optional inference path; runtimes still serve their own Service directly with no
+dependency on the API, and the API still never writes workload resources.
+
+## Web console
+
+The API serves a single-page console at `/` (`app/static/index.html`, no build
+step or external assets). It shows the registry, live `ModelDeployment` status
+and conditions, and can register versions, apply desired state, roll back,
+delete, and run inference through the proxy above.
 
 Example desired state:
 
@@ -88,3 +105,7 @@ errors. Gateway tests assert strict apply headers and timeout propagation. The
 cross-language envtest run exercised the actual async client against Kubernetes
 1.37 kube-apiserver and the generated CRD. It did not run Docker, kind, the
 controller process, garbage collection, or inference.
+
+`scripts/demo.sh` covers that gap manually on kind: registry, deploy, inference,
+controller drift repair after deleting the Deployment, v1→v2 upgrade, rollback,
+and garbage-collected delete. It is not yet part of CI.

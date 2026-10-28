@@ -71,15 +71,15 @@ class RequestBodyLimitMiddleware:
             message = await receive()
             buffered.append(message)
             if message["type"] == "http.disconnect":
-                await self.app(scope, _replay(buffered), send)
+                await self.app(scope, _replay(buffered, receive), send)
                 return
             total += len(message.get("body", b""))
             if total > self.max_bytes:
-                await self._reject(scope, _replay(buffered), send)
+                await self._reject(scope, _replay(buffered, receive), send)
                 return
             more_body = message.get("more_body", False)
 
-        await self.app(scope, _replay(buffered), send)
+        await self.app(scope, _replay(buffered, receive), send)
 
     async def _reject(self, scope: Scope, receive: Receive, send: Send) -> None:
         response = JSONResponse(
@@ -103,13 +103,14 @@ def _header(scope: Scope, name: bytes) -> str | None:
     return None
 
 
-def _replay(messages: list[Message]) -> Receive:
+def _replay(messages: list[Message], downstream: Receive) -> Receive:
     iterator = iter(messages)
 
     async def receive() -> Message:
         try:
             return next(iterator)
         except StopIteration:
-            return {"type": "http.request", "body": b"", "more_body": False}
+            # Body is consumed; later calls must wait for the real disconnect, not spin.
+            return await downstream()
 
     return receive

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app import __version__
@@ -87,6 +88,10 @@ def create_app(
     application.include_router(registry_router)
     application.include_router(deployment_router)
     application.include_router(async_router)
+
+    @application.get("/", include_in_schema=False)
+    async def dashboard() -> FileResponse:
+        return FileResponse(Path(__file__).parent / "static" / "index.html")
 
     # Add metrics endpoint if enabled
     if resolved_settings.metrics_enabled:

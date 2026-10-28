@@ -64,6 +64,29 @@ synchronous API/controller stack with its local PostgreSQL dependency. See [Arch
 [Reference runtime](docs/runtime.md), and [Local kind environment](docs/kind.md)
 for the implemented boundaries and exact validation status.
 
+## End-to-end demo
+
+With Docker, kind, and kubectl installed, bring up the full stack on a local
+kind cluster and walk through register → deploy v1 → infer → self-heal →
+upgrade to v2 → rollback → delete:
+
+```bash
+make kind-create kind-build kind-load
+KERNEXYS_POSTGRES_PASSWORD=change-me make kind-install
+make kind-validate
+bash scripts/demo.sh          # pauses between steps; NO_PAUSE=1 to run straight through
+make kind-delete
+```
+
+For a visual walkthrough, port-forward the API
+(`kubectl -n kernexys-system port-forward svc/kernexys-api 8000:8000`) and open
+the web console at <http://localhost:8000/>: registry, live deployment status,
+apply/rollback/delete, and inference in one page.
+
+The script expects `kernexysctl` on `PATH` (it is installed into `.venv` by
+`pip install -e .`); override with `KERNEXYSCTL=.venv/Scripts/kernexysctl.exe`
+on Windows.
+
 ## Run the current slice
 
 Prerequisites are Python 3.11+ and PostgreSQL. Create an isolated environment and

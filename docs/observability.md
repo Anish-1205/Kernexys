@@ -282,11 +282,10 @@ annotations:
 
 2. Include relevant context:
    ```python
-   logger.info("Deployment created", extra={
-       "deployment_name": name,
-       "namespace": namespace,
-       "duration_seconds": duration
-   })
+   logger.info(
+       "Deployment created",
+       extra={"deployment_name": name, "namespace": namespace, "duration_seconds": duration},
+   )
    ```
 
 3. Avoid logging sensitive data:
