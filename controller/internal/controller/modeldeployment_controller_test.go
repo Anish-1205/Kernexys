@@ -224,6 +224,31 @@ func TestWorkloadReadinessUpdatesActiveVersionAndConditions(t *testing.T) {
 	assertCondition(t, observed, platformv1alpha1.ConditionProgressing, metav1.ConditionFalse, "RolloutComplete")
 }
 
+func TestRolloutWithOldReplicasRemainingIsNotAvailable(t *testing.T) {
+	modelDeployment := validModelDeployment()
+	reconciler, counted := newTestReconciler(t, modelDeployment)
+	reconcileSuccessfully(t, reconciler, modelDeployment)
+
+	// Mid-rollout: the new pod is updated but not ready, and the old pod still
+	// counts toward the Deployment-wide ready and available totals.
+	deployment := getDeployment(t, counted, modelDeployment)
+	deployment.Status.ObservedGeneration = deployment.Generation
+	deployment.Status.Replicas = 2
+	deployment.Status.UpdatedReplicas = 1
+	deployment.Status.ReadyReplicas = 1
+	deployment.Status.AvailableReplicas = 1
+	if err := counted.Client.Status().Update(context.Background(), deployment); err != nil {
+		t.Fatalf("update Deployment rollout status: %v", err)
+	}
+
+	reconcileSuccessfully(t, reconciler, modelDeployment)
+	observed := getModelDeployment(t, counted, modelDeployment)
+	if observed.Status.ActiveVersion != "" {
+		t.Fatalf("active version = %q mid-rollout, want empty", observed.Status.ActiveVersion)
+	}
+	assertCondition(t, observed, platformv1alpha1.ConditionAvailable, metav1.ConditionFalse, "ReplicasNotReady")
+}
+
 func TestUnavailableDeploymentStillProgressingIsNotDegraded(t *testing.T) {
 	modelDeployment := validModelDeployment()
 	reconciler, counted := newTestReconciler(t, modelDeployment)

@@ -165,7 +165,10 @@ func (r *ModelDeploymentReconciler) updateObservedStatus(
 ) error {
 	desiredReplicas := desiredReplicaCount(modelDeployment)
 	ready := deployment.Status.ReadyReplicas
+	// Ready/available totals include old-ReplicaSet pods mid-rollout, so also
+	// require that no old replicas remain (the same check as kubectl rollout status).
 	available := deployment.Status.ObservedGeneration == deployment.Generation &&
+		deployment.Status.Replicas == desiredReplicas &&
 		deployment.Status.UpdatedReplicas == desiredReplicas &&
 		deployment.Status.AvailableReplicas == desiredReplicas &&
 		ready == desiredReplicas

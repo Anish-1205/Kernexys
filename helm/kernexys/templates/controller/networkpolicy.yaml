@@ -1,0 +1,43 @@
+{{- /* kernexys-deny-all (rendered with the API policy) also selects the controller pod. */}}
+{{- if and .Values.controller.enabled .Values.api.enabled .Values.api.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kernexys-controller
+  namespace: {{ .Values.namespace.system }}
+  labels:
+    {{- include "kernexys.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kernexys-controller
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS for service discovery.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow to the Kubernetes API server.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              component: kube-apiserver
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- range .Values.api.networkPolicy.kubernetesApiEndpoints }}
+    - to:
+        - ipBlock:
+            cidr: {{ .cidr | quote }}
+      ports:
+        - protocol: TCP
+          port: {{ .port }}
+    {{- end }}
+{{- end }}
